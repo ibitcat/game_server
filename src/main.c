@@ -16,7 +16,7 @@ a星寻路
 双数组字典树屏蔽字
 postgre sql 驱动
 地图
-定时器（最小堆和时间轮）
+定时器（时间轮）
 */
 
 int main(int argc, char** argv)
