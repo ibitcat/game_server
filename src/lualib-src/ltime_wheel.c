@@ -34,11 +34,12 @@ struct timer{
 	uint32_t usedNum;				// 定时器工厂大小
 	struct timer_node **usedTimer;	// 定时器工厂（所有的定时器节点都是从这里产生的）
 	struct timer_list freeTimer;	// 回收的定时器
+	timer_cb timerCb;				// 定时器回调函数
+	lua_State* L;
 };
 
 static struct timer *TI = NULL;
-static uint64_t startMsec = 0;
-static int flag = 0;
+static uint64_t startMsec = 0;		// 定时器创建时的时间戳（ms）
 
 static uint64_t gettime(){
 	struct timeval tv;
@@ -79,7 +80,7 @@ static struct timer_node * node_alloc(){
 		for (int i = TI->usedNum; i < newNum; ++i){
 			struct timer_node *node = (struct timer_node *)malloc(sizeof(struct timer_node));
 			memset(node, 0, sizeof(*node));
-			node->id = i;
+			node->id = i + 1;
 			us[i]= node;
 
 			// 插入到freeTimer
@@ -142,8 +143,8 @@ static void move_list(uint32_t level, uint32_t index){
 	struct timer_node *headNode = list_clear(&(TI->tv[level][index]));
 	while(headNode!=NULL){
 		struct timer_node *temp = headNode;
+		headNode = headNode->next;
 		add_node(temp);
-		headNode = temp->next;
 	}
 }
 
@@ -179,8 +180,8 @@ static void timer_exec(){
 	struct timer_node *pHead = list_clear(&TI->near[idx]);
 	while(pHead){
 		// 派发事件
-		flag = 1;
-		printf("timer id = %d, curTime =%llu,diff=%d\n", pHead->id, TI->currentMs, TI->currentMs-startMsec);
+		printf("timer id = %d, starttime = %lld, curTime = %llu, diff= %d \n", pHead->id, startMsec, TI->currentMs, TI->currentMs-startMsec);
+		TI->timerCb(TI->L, pHead->id);
 		struct timer_node *pTemp = pHead;
 		pHead = pHead->next;
 
@@ -193,22 +194,22 @@ static void timer_exec(){
 
 
 /*----------------------------------- API -----------------------------------*/
-uint32_t add_timer(uint32_t tm){
+uint32_t add_timer(uint32_t tickNum){
 	assert(TI);
-	assert(tm>0);
-	uint32_t ticks = tm; // 暂时把tm作为tick数量
+	assert(tickNum>0);
 
 	struct timer_node *node = node_alloc();
 	assert(node);
 	node->next = NULL;
-	node->expire = TI->tick + tm; //tm个tick后到期
+	node->expire = TI->tick + tickNum; //tickNum个滴答后到期
 	add_node(node);
 	return node->id;
 }
 
 void del_timer(uint32_t id){
-	assert(id<TI->usedNum);
-	struct timer_node *pNode = TI->usedTimer[id];
+	assert(id>0);
+	assert(id<=TI->usedNum);
+	struct timer_node *pNode = TI->usedTimer[id-1];
 	if (pNode->isuse>0){
 		int32_t level = pNode->level;
 		int32_t index = pNode->index;
@@ -257,23 +258,18 @@ int32_t timer_updatetime(void) {
 
 		uint64_t nextMs = TI->currentMs + 10;
 		int32_t sleepMs = nextMs - cp;
-		//printf("next =  %llu, cp = %llu, sleepMs = %d\n", nextMs, cp, sleepMs);
 		sleepMs = sleepMs>0 ? sleepMs : 0;
-
-		if (flag==1){
-			printf("cp = %llu\n", cp);
-			flag = 0;
-			add_timer(100);
-		}
 		return sleepMs;
 	}
 	return 10;
 }
 
-void create_timer(){
+void create_timer(lua_State *L, timer_cb cb){
 	struct timer *ti = (struct timer *)malloc(sizeof(struct timer));
 	assert(ti!=NULL);
 	memset(ti,0,sizeof(*ti));
+	ti->L = L;
+	ti->timerCb = cb;
 
 	int i;
 	for (i = 0; i < 256; ++i){
@@ -314,4 +310,30 @@ void destroy_timer(){
 		free(TI->usedTimer[i]);
 	}
 	free(TI);
+}
+
+/*----------------------------------- lua API -----------------------------------*/
+static int ladd_timer(lua_State *L){
+	lua_Integer tickNum = lua_tointeger(L, 1);
+	uint32_t timerId = add_timer((uint32_t)tickNum);
+	lua_pushinteger(L, timerId);
+	return 1;
+}
+
+static int ldel_timer(lua_State *L){
+	lua_Integer timerId = lua_tointeger(L, 1);
+	del_timer((uint32_t)timerId);
+	return 0;
+}
+
+int luaopen_timewheel(struct lua_State* L){
+	luaL_checkversion(L);
+
+	luaL_Reg l[] = {
+		{ "addTimer", ladd_timer },
+		{ "delTimer", ldel_timer },
+		{ NULL,  NULL }
+	};
+	luaL_newlib(L,l);
+	return 1;
 }

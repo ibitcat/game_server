@@ -28,6 +28,8 @@ int luaopen_uuid(struct lua_State* L){
 		{ "uuid", luuid },
 		{ NULL,  NULL }
 	};
-	luaL_newlib(L,l);
+	//luaL_newlib(L,l);
+	(luaL_checkversion(L), luaL_newlibtable(L,l), luaL_setfuncs(L,l,0));
+
 	return 1;
 }
