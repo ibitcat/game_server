@@ -40,9 +40,9 @@ int anetSetBlock(char *err, int fd, int non_block) {
     int flags;
 
 #ifdef WIN32
-    if (non_block) /* ÉčÖĂˇÇ×čČű */
+    if (non_block) /* 设置为非阻塞 */
 		flags = 1;
-    else	/* ÇĺłýˇÇ×čČű */
+    else	/* 设置为阻塞 */
 		flags = 0;
 
     if (ioctlsocket(fd, FIONBIO, &flags) == -1) {

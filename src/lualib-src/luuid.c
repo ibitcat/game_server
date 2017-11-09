@@ -4,7 +4,7 @@
 #include "luuid.h"
 #include "lbase64.h"
 
-static int luuid(lua_State *L){
+static int lc_uuid(lua_State *L){
 	// uuid
 	uuid_t uu;
 	uuid_generate(uu);
@@ -25,7 +25,7 @@ int luaopen_uuid(struct lua_State* L){
 	luaL_checkversion(L);
 
 	luaL_Reg l[] = {
-		{ "uuid", luuid },
+		{ "uuid", lc_uuid },
 		{ NULL,  NULL }
 	};
 	//luaL_newlib(L,l);

@@ -79,7 +79,7 @@ static int init(uint16_t work_id) {
     return 0;
 }
 
-static int linit(lua_State* l) {
+static int lc_init(lua_State* l) {
     int16_t work_id = 0;
     if (lua_gettop(l) > 0) {
         lua_Integer id = luaL_checkinteger(l, 1);
@@ -95,7 +95,7 @@ static int linit(lua_State* l) {
     return 1;
 }
 
-static int lnextid(lua_State* l) {
+static int lc_nextid(lua_State* l) {
     int64_t id = next_id();
     lua_pushinteger(l, (lua_Integer)id);
     return 1;
@@ -105,8 +105,8 @@ LUAMOD_API int luaopen_snowflake(lua_State* l) {
     spinlock_init(&sync_policy);
     luaL_checkversion(l);
     luaL_Reg lib[] = {
-        { "init", linit },
-        { "next_id", lnextid },
+        { "init", lc_init },
+        { "next_id", lc_nextid },
         { NULL, NULL }
     };
     luaL_newlib(l, lib);

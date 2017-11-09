@@ -313,14 +313,14 @@ void destroy_timer(){
 }
 
 /*----------------------------------- lua API -----------------------------------*/
-static int ladd_timer(lua_State *L){
+static int lc_add_timer(lua_State *L){
 	lua_Integer tickNum = lua_tointeger(L, 1);
 	uint32_t timerId = add_timer((uint32_t)tickNum);
 	lua_pushinteger(L, timerId);
 	return 1;
 }
 
-static int ldel_timer(lua_State *L){
+static int lc_del_timer(lua_State *L){
 	lua_Integer timerId = lua_tointeger(L, 1);
 	del_timer((uint32_t)timerId);
 	return 0;
@@ -330,8 +330,8 @@ int luaopen_timewheel(struct lua_State* L){
 	luaL_checkversion(L);
 
 	luaL_Reg l[] = {
-		{ "addTimer", ladd_timer },
-		{ "delTimer", ldel_timer },
+		{ "addTimer", lc_add_timer },
+		{ "delTimer", lc_del_timer },
 		{ NULL,  NULL }
 	};
 	luaL_newlib(L,l);

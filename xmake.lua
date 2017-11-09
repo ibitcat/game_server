@@ -27,6 +27,8 @@ target("my_server")
     add_includedirs("$(projectdir)/src/3rd/libuuid-1.0.3")
     add_includedirs("$(projectdir)/src/lua-5.3.4")
     add_includedirs("$(projectdir)/src/lualib-src")
+    add_includedirs("$(projectdir)/src/c-src")
+    add_includedirs("$(projectdir)/src/c-src/aev")
 
     -- set kind
     set_kind("binary")
