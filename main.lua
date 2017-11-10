@@ -1,12 +1,14 @@
 
 print("c call lua")
 
--- function onTimer()
--- 	local tickNum = 1--math.random(1,5)
--- 	ltimewheel.addTimer(tickNum*100)
--- 	print("exp = ", tickNum, luuid.uuid())
--- 	return 1
--- end
+ltimewheel.addTimer(1*100)
+
+function onTimer()
+	local tickNum = 1--math.random(1,5)
+	ltimewheel.addTimer(tickNum*100)
+	--print("exp = ", tickNum, luuid.uuid())
+	return 1
+end
 
 -- for i=1,10 do
 -- 	print(luuid.uuid())
@@ -32,8 +34,8 @@ print("c call lua")
 -- 监听连接
 -- 连接成功后，发起hello
 
-for k,v in pairs(_ENV) do
-	print(k,v)
-end
+-- for k,v in pairs(_ENV) do
+-- 	print(k,v)
+-- end
 
-lenv.net_listen("127.0.0.1",7777)
+--lenv.net_listen("127.0.0.1",7777)
