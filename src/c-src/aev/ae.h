@@ -2,6 +2,7 @@
 #define __AE_H__
 
 #include <time.h>
+#include <stdint.h>
 
 #define AE_OK 0
 #define AE_ERR -1
@@ -10,14 +11,6 @@
 #define AE_READABLE 1
 #define AE_WRITABLE 2
 
-#define AE_FILE_EVENTS 1
-#define AE_TIME_EVENTS 2
-#define AE_ALL_EVENTS (AE_FILE_EVENTS|AE_TIME_EVENTS)
-#define AE_DONT_WAIT 4
-
-#define AE_NOMORE -1
-#define AE_DELETED_EVENT_ID -1
-
 /* Macros */
 #define AE_NOTUSED(V) ((void) V)
 
@@ -25,9 +18,36 @@ struct aeEventLoop;
 
 /* Types and data structures */
 typedef void aeFileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask);
-typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData);
-typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
+typedef int aeTimeProc(uint32_t id, void *clientData);
+
+struct timer_node {
+    uint32_t expire;                // 到期时间
+    uint32_t id;                    // 定时器id
+    int32_t level;                  // -1表示在near内
+    int32_t index;
+    uint32_t isuse;                 // 1表示在使用中的节点
+    aeTimeProc *cb;
+    void *clientData;
+    struct timer_node *pre;
+    struct timer_node *next;
+};
+
+struct timer_list{
+    struct timer_node *head;
+    struct timer_node *tail;
+};
+
+typedef struct aeTimer{
+    struct timer_list near[256];
+    struct timer_list tv[4][64];
+    uint32_t tick;                  // 经过的滴答数,2^32个滴答
+    uint32_t starttime;             // 定时器启动时的时间戳（秒）
+    uint64_t currentMs;             // 当前毫秒数
+    uint32_t usedNum;               // 定时器工厂大小
+    struct timer_node **usedTimer;  // 定时器工厂（所有的定时器节点都是从这里产生的）
+    struct timer_list freeTimer;    // 回收的定时器
+} aeTimer;
 
 /* File event structure */
 typedef struct aeFileEvent {
@@ -37,16 +57,6 @@ typedef struct aeFileEvent {
     void *clientData;
 } aeFileEvent;
 
-/* Time event structure */
-typedef struct aeTimeEvent {
-    long long id; /* time event identifier. */
-    long when_sec; /* seconds */
-    long when_ms; /* milliseconds */
-    aeTimeProc *timeProc;
-    aeEventFinalizerProc *finalizerProc;
-    void *clientData;
-    struct aeTimeEvent *next;
-} aeTimeEvent;
 
 /* A fired event */
 typedef struct aeFiredEvent {
@@ -54,38 +64,44 @@ typedef struct aeFiredEvent {
     int mask;
 } aeFiredEvent;
 
+
 /* State of an event based program */
 typedef struct aeEventLoop {
     int maxfd;   /* highest file descriptor currently registered */
     int setsize; /* max number of file descriptors tracked */
-    long long timeEventNextId;
     time_t lastTime;     /* Used to detect system clock skew */
     aeFileEvent *events; /* Registered events */
     aeFiredEvent *fired; /* Fired events */
-    aeTimeEvent *timeEventHead;
+    aeTimer *timer; /* Time wheel */
     int stop;
     void *apidata; /* This is used for polling API specific data */
     aeBeforeSleepProc *beforesleep;
 } aeEventLoop;
 
+
 /* Prototypes */
 aeEventLoop *aeCreateEventLoop(int setsize);
 void aeDeleteEventLoop(aeEventLoop *eventLoop);
 void aeStop(aeEventLoop *eventLoop);
-int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
-        aeFileProc *proc, void *clientData);
+
+/* File Event */
+int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask, aeFileProc *proc, void *clientData);
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask);
 int aeGetFileEvents(aeEventLoop *eventLoop, int fd);
-long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
-        aeTimeProc *proc, void *clientData,
-        aeEventFinalizerProc *finalizerProc);
-int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id);
-int aeProcessEvents(aeEventLoop *eventLoop, int flags);
-//int aeWait(int fd, int mask, long long milliseconds);
+
+/* Process */
+int aeProcessEvents(aeEventLoop *eventLoop);
 void aeMain(aeEventLoop *eventLoop);
 char *aeGetApiName(void);
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep);
 int aeGetSetSize(aeEventLoop *eventLoop);
 int aeResizeSetSize(aeEventLoop *eventLoop, int setsize);
+
+/* Time Event */
+int aeCreateTimer(aeEventLoop * eventLoop);
+void aeDestroyTimer(aeEventLoop * eventLoop);
+uint32_t aeAddTimer(aeEventLoop * eventLoop, uint32_t tickNum, aeTimeProc *proc, void *clientData);
+void aeDelTimer(aeEventLoop * eventLoop, uint32_t id);
+int32_t aeTimerUpdatetime(aeEventLoop * eventLoop);
 
 #endif

@@ -1,6 +1,12 @@
 #ifndef _APP_H_
 #define _APP_H_
 
+// lua
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+
+// event loop
 #include "ae.h"
 #include "anet.h"
 
@@ -16,5 +22,8 @@ typedef struct appServer{
 	aeEventLoop *pEl;
 } appServer;
 
+
+int initApp(appServer *app);
+int runApp(appServer *app);
 
 #endif
