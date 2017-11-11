@@ -1,11 +1,11 @@
 
 print("c call lua")
 
-ltimewheel.addTimer(1*100)
+env.addTimer(1*100)
 
 function onTimer()
 	local tickNum = 1--math.random(1,5)
-	ltimewheel.addTimer(tickNum*100)
+	env.addTimer(tickNum*100)
 	--print("exp = ", tickNum, luuid.uuid())
 	return 1
 end

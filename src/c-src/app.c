@@ -2,19 +2,13 @@
 //#include <unistd.h> usleep 头文件
 
 #include "app.h"
-
-#include "luuid.h"
 #include "lsnowflake.h"
-#include "ltime_wheel.h"
 #include "lenv.h"
-#include "app.h"
 
 // lua extra libs
 static struct luaL_Reg libs[] = {
-	{"luuid", luaopen_uuid},
-	{"lsnowflake", luaopen_snowflake},
-	{"ltimewheel", luaopen_timewheel},
-	{"lenv", luaopen_env},
+	{"snowflake", luaopen_snowflake},
+	{"env", luaopen_env},
 	{NULL, NULL}
 };
 
