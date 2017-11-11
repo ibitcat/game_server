@@ -8,21 +8,6 @@
 #include "lenv.h"
 #include "app.h"
 
-#define LL_DEBUG 0
-#define LL_VERBOSE 1
-#define LL_NOTICE 2
-#define LL_WARNING 3
-
-void serverLog(int level, const char *fmt, ...) {
-	va_list ap;
-	char msg[1024];
-
-	va_start(ap, fmt);
-	vsnprintf(msg, sizeof(msg), fmt, ap);
-	va_end(ap);
-	printf("[log][%d]:%s\n",level, msg);
-}
-
 static int ltimeCallback(uint32_t id, void *clientData){
 	printf("ltimeCallback : timer id = %d\n", id);
 	appServer *app = (appServer *)clientData;
@@ -49,6 +34,7 @@ static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) 
 
 	appServer *app = (appServer *)privdata;
 	int cfd = anetTcpAccept(app->neterr, fd, cip, sizeof(cip), &cport);
+	printf("%d\n", cfd);
 	if (cfd==ANET_ERR){
 		if (errno != EWOULDBLOCK){
 			serverLog(LL_WARNING, "Accepting client connection: %s", app->neterr);
@@ -63,11 +49,11 @@ static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) 
 	//acceptCommonHandler(cfd,0,cip);
 
 	// 处理接收到fd
-	// appClient * client = createClient(cfd);
-	// if (client==NULL){
-	// 	serverLog(LL_WARNING, "create client fail: %d", cfd);
-	// 	return;
-	// }
+	appClient * client = createClient(cfd);
+	if (client==NULL){
+		serverLog(LL_WARNING, "create client fail: %d", cfd);
+		return;
+	}
 }
 
 
@@ -130,6 +116,10 @@ static int lc_net_listen(lua_State *L){
 
 	lua_pushinteger(L, fd);
 	return 1;
+}
+
+static int lc_net_sendmsg(){
+	return 0;
 }
 
 // timer

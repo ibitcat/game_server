@@ -10,14 +10,46 @@
 #include "ae.h"
 #include "anet.h"
 
+#define LL_DEBUG 0
+#define LL_VERBOSE 1
+#define LL_NOTICE 2
+#define LL_WARNING 3
+
+static inline void serverLog(int level, const char *fmt, ...) {
+	va_list ap;
+	char msg[1024];
+
+	va_start(ap, fmt);
+	vsnprintf(msg, sizeof(msg), fmt, ap);
+	va_end(ap);
+	printf("[log][%d]:%s\n",level, msg);
+}
+
+// 整个包长度|flag预留|from type|from id|to type|to id|协议号|消息内容
+struct msgBuff{
+	int len;
+	int flag;
+	char fromType;
+	unsigned char fromId;
+	char toType;
+	unsigned char toId;
+	unsigned int cmd;
+	char buf[];
+};
+
 typedef struct appClient{
-	char * ip;		// 连接ip
-	int port;		// 连接端口
-	int fd;			// fd
+	unsigned int id;		// 连接id
+	int port;				// 连接端口
+	int fd;					// fd
+	unsigned int usedlen; 	// 已经用掉的长度
+	unsigned int buflen;	// buf总长度
+	char * ip;				// 连接ip
+	char * querybuf;		// buf
 } appClient;
 
 
 typedef struct appServer{
+	unsigned int nextClientId;
 	char *bindaddr;
 	short port;
 	int size;
@@ -25,15 +57,16 @@ typedef struct appServer{
 	char neterr[1024];
 	char family;			// 进程类型
 	unsigned char index; 	// 进程编号 0-255
+	int tcpkeepalive;
 
 	lua_State *L;
 	aeEventLoop *pEl;
 } appServer;
 
 
-int initApp(appServer *app);
-int runApp(appServer *app);
+int createApp();
+int runApp();
 
-appClient * createClient(fd);
+appClient * createClient(int fd);
 int freeClient(appClient * client);
 #endif

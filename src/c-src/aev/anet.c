@@ -75,8 +75,7 @@ int anetBlock(char *err, int fd) {
 /* Set TCP keep alive option to detect dead peers. The interval option
  * is only used for Linux as we are using Linux-specific APIs to set
  * the probe send time, interval, and count. */
-int anetKeepAlive(char *err, int fd, int interval)
-{
+int anetKeepAlive(char *err, int fd, int interval){
     int val = 1;
 
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) == -1)
@@ -121,39 +120,31 @@ int anetKeepAlive(char *err, int fd, int interval)
     return ANET_OK;
 }
 
-static int anetSetTcpNoDelay(char *err, int fd, int val)
-{
-    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) == -1)
-    {
+static int anetSetTcpNoDelay(char *err, int fd, int val){
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) == -1){
         anetSetError(err, "setsockopt TCP_NODELAY: %s", strerror(errno));
         return ANET_ERR;
     }
     return ANET_OK;
 }
 
-int anetEnableTcpNoDelay(char *err, int fd)
-{
+int anetEnableTcpNoDelay(char *err, int fd){
     return anetSetTcpNoDelay(err, fd, 1);
 }
 
-int anetDisableTcpNoDelay(char *err, int fd)
-{
+int anetDisableTcpNoDelay(char *err, int fd){
     return anetSetTcpNoDelay(err, fd, 0);
 }
 
-
-int anetSetSendBuffer(char *err, int fd, int buffsize)
-{
-    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buffsize, sizeof(buffsize)) == -1)
-    {
+int anetSetSendBuffer(char *err, int fd, int buffsize){
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buffsize, sizeof(buffsize)) == -1) {
         anetSetError(err, "setsockopt SO_SNDBUF: %s", strerror(errno));
         return ANET_ERR;
     }
     return ANET_OK;
 }
 
-int anetTcpKeepAlive(char *err, int fd)
-{
+int anetTcpKeepAlive(char *err, int fd) {
     int yes = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes)) == -1) {
         anetSetError(err, "setsockopt SO_KEEPALIVE: %s", strerror(errno));

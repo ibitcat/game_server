@@ -1,6 +1,8 @@
+--set_modes("debug")
+
 -- the debug mode
 if is_mode("debug") then
-    
+
     -- enable the debug symbols
     set_symbols("debug")
 

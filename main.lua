@@ -5,7 +5,7 @@ env.addTimer(1*100)
 
 function onTimer()
 	local tickNum = 1--math.random(1,5)
-	env.addTimer(tickNum*100)
+	--env.addTimer(tickNum*100)
 	--print("exp = ", tickNum, luuid.uuid())
 	return 1
 end
@@ -38,4 +38,5 @@ end
 -- 	print(k,v)
 -- end
 
---lenv.net_listen("127.0.0.1",7777)
+local fd = env.net_listen("127.0.0.1",7777)
+print("lua call listen, fd  = ", fd)
