@@ -1,6 +1,8 @@
 #ifndef _APP_H_
 #define _APP_H_
 
+#include <assert.h>
+
 // lua
 #include <lua.h>
 #include <lualib.h>
@@ -37,7 +39,8 @@ struct msgBuff{
 	char buf[];
 };
 
-typedef struct appClient{
+// 网络会话
+typedef struct netSession{
 	unsigned int id;		// 连接id
 	int port;				// 连接端口
 	int fd;					// fd
@@ -45,8 +48,14 @@ typedef struct appClient{
 	unsigned int buflen;	// buf总长度
 	char * ip;				// 连接ip
 	char * querybuf;		// buf
-} appClient;
+	struct netSession * next;
+} netSession;
 
+typedef struct sessionList{
+	netSession *head;
+	netSession *tail;
+	int count;
+} sessionList;
 
 typedef struct appServer{
 	unsigned int nextClientId;
@@ -67,6 +76,10 @@ typedef struct appServer{
 int createApp();
 int runApp();
 
-appClient * createClient(int fd);
-int freeClient(appClient * client);
+netSession * createSession(int fd);
+int freeSession(netSession * session);
+
+// net api
+int netListen(int port, char * addr);
+int netConnect(char * addr, int port);
 #endif

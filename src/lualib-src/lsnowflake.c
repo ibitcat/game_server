@@ -1,16 +1,11 @@
 #define LUA_LIB
 
-#include <stdint.h>
 #include <time.h>
 #include <sys/time.h>
 #include "spinlock.h"
 #include "lsnowflake.h"
 
 #include <stdio.h>
-
-#define MAX_INDEX_VAL       0x0fff
-#define MAX_WORKID_VAL      0x03ff
-#define MAX_TIMESTAMP_VAL   0x01ffffffffff
 
 typedef struct _t_ctx {
     int64_t last_timestamp;
@@ -39,7 +34,20 @@ static void wait_next_msec() {
     g_ctx.index = 0;
 }
 
-static uint64_t next_id() {
+int snowflakeInit(uint16_t work_id) {
+    spinlock_lock(&sync_policy);
+    if (g_inited) {
+        spinlock_unlock(&sync_policy);
+        return 0;
+    }
+    g_ctx.work_id = work_id;
+    g_ctx.index = 0;
+    g_inited = 1;
+    spinlock_unlock(&sync_policy);
+    return 0;
+}
+
+uint64_t snowflakeNextId() {
     spinlock_lock(&sync_policy);
     if (!g_inited) {
         spinlock_unlock(&sync_policy);
@@ -64,51 +72,4 @@ static uint64_t next_id() {
     );
     spinlock_unlock(&sync_policy);
     return nextid;
-}
-
-static int init(uint16_t work_id) {
-    spinlock_lock(&sync_policy);
-    if (g_inited) {
-        spinlock_unlock(&sync_policy);
-        return 0;
-    }
-    g_ctx.work_id = work_id;
-    g_ctx.index = 0;
-    g_inited = 1;
-    spinlock_unlock(&sync_policy);
-    return 0;
-}
-
-static int lc_init(lua_State* l) {
-    int16_t work_id = 0;
-    if (lua_gettop(l) > 0) {
-        lua_Integer id = luaL_checkinteger(l, 1);
-        if (id < 0 || id > MAX_WORKID_VAL) {
-            return luaL_error(l, "Work id is in range of 0 - 1023.");
-        }
-        work_id = (int16_t)id;
-    }
-    if (init(work_id)) {
-        return luaL_error(l, "Snowflake has been initialized.");
-    }
-    lua_pushboolean(l, 1);
-    return 1;
-}
-
-static int lc_nextid(lua_State* l) {
-    int64_t id = next_id();
-    lua_pushinteger(l, (lua_Integer)id);
-    return 1;
-}
-
-LUAMOD_API int luaopen_snowflake(lua_State* l) {
-    spinlock_init(&sync_policy);
-    luaL_checkversion(l);
-    luaL_Reg lib[] = {
-        { "init", lc_init },
-        { "next_id", lc_nextid },
-        { NULL, NULL }
-    };
-    luaL_newlib(l, lib);
-    return 1;
 }

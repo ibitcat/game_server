@@ -4,6 +4,7 @@
 // uuid
 #include "uuid.h"
 #include "lbase64.h"
+#include "lsnowflake.h"
 
 #include "lenv.h"
 #include "app.h"
@@ -28,35 +29,6 @@ static int ltimeCallback(uint32_t id, void *clientData){
 	return 0;
 }
 
-static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
-	int cport;
-	char cip[64];
-
-	appServer *app = (appServer *)privdata;
-	int cfd = anetTcpAccept(app->neterr, fd, cip, sizeof(cip), &cport);
-	printf("%d\n", cfd);
-	if (cfd==ANET_ERR){
-		if (errno != EWOULDBLOCK){
-			serverLog(LL_WARNING, "Accepting client connection: %s", app->neterr);
-		}
-		return;
-	}
-
-	printf("Accepted %s:%d \n", cip, cport);
-	char *str = "hello, accepted……";
-	write(cfd,str,strlen(str));
-	//serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
-	//acceptCommonHandler(cfd,0,cip);
-
-	// 处理接收到fd
-	appClient * client = createClient(cfd);
-	if (client==NULL){
-		serverLog(LL_WARNING, "create client fail: %d", cfd);
-		return;
-	}
-}
-
-
 /* =========================== lua api =========================== */
 static int lc_uuid(lua_State *L){
 	// uuid
@@ -75,6 +47,29 @@ static int lc_uuid(lua_State *L){
 	return 1;
 }
 
+// snowflake
+static int lc_snowflake_init(lua_State* l) {
+    int16_t work_id = 0;
+    if (lua_gettop(l) > 0) {
+        lua_Integer id = luaL_checkinteger(l, 1);
+        if (id < 0 || id > MAX_WORKID_VAL) {
+            return luaL_error(l, "Work id is in range of 0 - 1023.");
+        }
+        work_id = (int16_t)id;
+    }
+    if (snowflakeInit(work_id)) {
+        return luaL_error(l, "Snowflake has been initialized.");
+    }
+    lua_pushboolean(l, 1);
+    return 1;
+}
+
+static int lc_snowflake_nextid(lua_State* l) {
+    int64_t id = snowflakeNextId();
+    lua_pushinteger(l, (lua_Integer)id);
+    return 1;
+}
+
 // net
 static int lc_net_connect(lua_State *L){
 	// 如果是同一个物理机，可以使用unix域套接字
@@ -86,10 +81,7 @@ static int lc_net_connect(lua_State *L){
 
 	char *addr = luaL_checkstring(L, -1);
 	int port = (int)luaL_checkinteger(L, -2);
-	int fd = anetTcpConnect(app->neterr, addr, port);
-	if (fd==ANET_ERR){
-		printf("net connect fail\n");
-	}
+	int fd = netConnect(addr, port);
 	lua_pushinteger(L, fd);
 	return 1;
 }
@@ -102,23 +94,17 @@ static int lc_net_listen(lua_State *L){
 
 	char *addr = luaL_checkstring(L, 1);
 	int port = (int)luaL_checkinteger(L, 2);
-	int fd = anetTcpServer(app->neterr, port, addr, 511);
-	if (fd == ANET_ERR) {
-		serverLog(LL_WARNING, "Creating Server TCP listening socket %s:%d: %s", addr ? addr : "*", port, app->neterr);
-	}else{
-		anetNonBlock(NULL, fd);
-
-		// listen
-		if (aeCreateFileEvent(app->pEl, fd, AE_READABLE, acceptTcpHandler, app) == -1){
-			return luaL_error(L, "Unrecoverable error creating server.ipfd file event.");
-		}
+	int fd = netListen(port, addr);
+	if (fd<0) {
+		return luaL_error(L, "Unrecoverable error creating server.ipfd file event.");
 	}
-
 	lua_pushinteger(L, fd);
 	return 1;
 }
 
-static int lc_net_sendmsg(){
+static int lc_net_sendmsg(lua_State *L){
+
+	// lua_sendMsg(fd,toTy,toId,cmd,pkt,pid);
 	return 0;
 }
 
@@ -153,6 +139,8 @@ int luaopen_env(struct lua_State* L){
 
 	luaL_Reg l[] = {
 		{ "uuid", lc_uuid },
+		{ "sf_init", lc_snowflake_init },
+        { "sf_nextid", lc_snowflake_nextid },
 		{ "net_connect", lc_net_connect },
 		{ "net_listen", lc_net_listen },
 		{ "addTimer", lc_timer_add },
