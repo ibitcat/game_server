@@ -33,6 +33,7 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 	int headLen = sizeof(struct msgBuff);
 	int pos = 0;
 	int diff = session->usedlen - pos;
+	lua_State *L = app.L;
 	while(diff>=headLen){
 		struct msgBuff * buf = (struct msgBuff *)(session->querybuf+pos);
 		// 检查len是否合法
@@ -57,8 +58,141 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 	memmove(session->querybuf, session->querybuf+pos, diff);
 }
 
-static void writeToSession(){
+static netSession *findSessionByFd(int fd){
+	netSession * head = app.sessionHead;
+	while(head){
+		if (head->fd == fd){
+			return head;
+		}
+		head = head->next;
+	}
+	return NULL;
+}
 
+void writeHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
+	netSession * session = findSessionByFd(fd);
+	assert(session);
+
+	int total = session->remainlen;
+	int sendedLen = 0;
+	while((total-sendedLen)>0){
+		int nwritten = write(fd, session->outbuf+sendedLen, total-sendedLen);
+		if (nwritten>0){
+			assert(nwritten<=total);
+			sendedLen += nwritten;
+		}else if (nwritten<0){
+			// 写入失败
+			if(errno==EAGAIN){
+				// 注册事件
+				break;
+			}else if(errno==EINTR){
+				// 继续循环
+			}else{
+				// socket有问题了
+			}
+		}
+	}
+
+	// 没有发完
+	int difflen = total-sendedLen;
+	difflen = difflen>0?difflen:0;
+	session->remainlen = difflen;
+	if (difflen==0){
+		// del file event
+		aeDeleteFileEvent(app.pEl, fd, AE_WRITABLE);
+	}
+}
+
+
+static void writeToSession(int fd, char * buf, int len){
+	netSession * session = findSessionByFd(fd);
+	if(session==NULL){
+		serverLog(0,"session not found,fd = %d", fd);
+		return;
+	}
+
+	int headLen = sizeof(struct msgBuff);
+	int totalLen = headLen +len;
+	struct msgBuff * msg = (struct msgBuff *)malloc(totalLen);
+	msg->len = totalLen;
+	msg->fromType = 'a';
+	msg->fromId = 1;
+	msg->toType = 'b';
+	msg->toId = 1;
+	msg->cmd = 1001;
+	if (len>0){
+		memcpy(msg+headLen, buf, len);
+	}
+
+	// write
+	// 如果buf没有剩余数据，直接发
+	if (session->remainlen==0){
+		int sendedLen = 0;
+		while((totalLen-sendedLen)>0){
+			int nwritten = write(fd,msg+sendedLen,totalLen-sendedLen);
+			if (nwritten>0){
+				assert(nwritten<=totalLen);
+				sendedLen += nwritten;
+			}else if (nwritten<0){
+				// 写入失败
+				if(errno==EAGAIN){
+					// 注册事件
+					break;
+				}else if(errno==EINTR){
+					// 继续循环
+				}else{
+					// socket有问题了
+				}
+			}
+		}
+
+		// 没有发完的放入到out buf
+		int diff = totalLen-sendedLen;
+		if (diff>0){
+			session->remainlen += diff;
+			memcpy(session->outbuf, msg+sendedLen, diff);
+			//aeCreateFileEvent();
+		}
+	}else{
+		int diff = session->outlen - session->remainlen;
+		if (diff<totalLen){
+			// outbuf扩大
+			int newLen = session->remainlen + totalLen;
+			session->outbuf = realloc(session->outbuf, newLen);
+			session->outlen = newLen;
+		}
+		session->remainlen += totalLen;
+		memmove(session->outbuf + session->remainlen, msg, totalLen);
+
+		// 发送
+		int total = session->remainlen;
+		int sendedLen = 0;
+		while((total-sendedLen)>0){
+			int nwritten = write(fd, session->outbuf+sendedLen, total-sendedLen);
+			if (nwritten>0){
+				assert(nwritten<=total);
+				sendedLen += nwritten;
+			}else if (nwritten<0){
+				// 写入失败
+				if(errno==EAGAIN){
+					// 注册事件
+					break;
+				}else if(errno==EINTR){
+					// 继续循环
+				}else{
+					// socket有问题了
+				}
+			}
+		}
+
+		// 没有发完
+		int difflen = total-sendedLen;
+		if (difflen>0){
+			session->remainlen = difflen;
+			memmove(session->outbuf, session->outbuf+sendedLen, difflen);
+			aeCreateFileEvent(app.pEl, fd, AE_WRITABLE, writeHandler, session);
+		}
+	}
 }
 
 static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
@@ -115,10 +249,13 @@ netSession * createSession(int fd){
 		}
 	}
 
+	session->next = NULL;
 	session->id = ++app.nextClientId;
 	session->buflen = 1024;	// 初始buff=1kb
 	session->querybuf = (unsigned char *)malloc(1024);
 	session->usedlen = 0;
+
+	// 插入到list中
 	return session;
 }
 

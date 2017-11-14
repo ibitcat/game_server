@@ -41,21 +41,18 @@ struct msgBuff{
 
 // 网络会话
 typedef struct netSession{
-	unsigned int id;		// 连接id
-	int port;				// 连接端口
-	int fd;					// fd
-	unsigned int usedlen; 	// 已经用掉的长度
-	unsigned int buflen;	// buf总长度
-	char * ip;				// 连接ip
-	char * querybuf;		// buf
+	unsigned int id;			// 连接id
+	int port;					// 连接端口
+	int fd;						// fd
+	unsigned int usedlen; 		// in buf 未处理完的数据长度
+	unsigned int buflen;		// buf 总长度
+	unsigned int outlen;		// out buf总长度
+	unsigned int remainlen;		// out buf剩余数据的长度
+	char * ip;					// 连接ip
+	char * querybuf;			// input buf
+	char * outbuf;				// output buf
 	struct netSession * next;
 } netSession;
-
-typedef struct sessionList{
-	netSession *head;
-	netSession *tail;
-	int count;
-} sessionList;
 
 typedef struct appServer{
 	unsigned int nextClientId;
@@ -64,9 +61,10 @@ typedef struct appServer{
 	int size;
 	char err[1024];
 	char neterr[1024];
-	char family;			// 进程类型
-	unsigned char index; 	// 进程编号 0-255
+	char family;				// 进程类型
+	unsigned char index; 		// 进程编号 0-255
 	int tcpkeepalive;
+	netSession * sessionHead;	// 会话列表头
 
 	lua_State *L;
 	aeEventLoop *pEl;
