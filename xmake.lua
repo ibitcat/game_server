@@ -1,4 +1,4 @@
---set_modes("debug")
+set_modes("debug")
 
 -- the debug mode
 if is_mode("debug") then

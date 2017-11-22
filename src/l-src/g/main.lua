@@ -1,7 +1,7 @@
 
 print("c call lua")
 
-env.addTimer(1*100)
+env.lc_addTimer(1*100)
 
 function onTimer()
 	local tickNum = 1--math.random(1,5)
@@ -19,10 +19,14 @@ end
 -- 	print(k,v)
 -- end
 
-local fd = env.net_listen("127.0.0.1",7777)
+local fd = env.lc_netListen("127.0.0.1",7777)
 print("lua call listen, fd  = ", fd)
 
-function handleMsg(fd,cmd,fromType,fromId,toType,toId)
+--c call lua
+function cl_handleMsg(fd,cmd,fromType,fromId,toType,toId)
 	-- body
-	local test
+	print(fd,cmd,fromType,fromId,toType,toId)
+
+	-- 回写
+	lc_netSendMsg(fd,"hello")
 end

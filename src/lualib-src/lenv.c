@@ -79,8 +79,8 @@ static int lc_net_connect(lua_State *L){
 		return luaL_error(L, "lc_net_connect error");
 	}
 
-	char *addr = luaL_checkstring(L, -1);
-	int port = (int)luaL_checkinteger(L, -2);
+	char *addr = luaL_checkstring(L, -2);
+	int port = (int)luaL_checkinteger(L, -1);
 	int fd = netConnect(addr, port);
 	lua_pushinteger(L, fd);
 	return 1;
@@ -103,8 +103,12 @@ static int lc_net_listen(lua_State *L){
 }
 
 static int lc_net_sendmsg(lua_State *L){
-
 	// lua_sendMsg(fd,toTy,toId,cmd,pkt,pid);
+	size_t msgLen = 0;
+	unsigned char * src = NULL;
+	int fd = luaL_checkinteger(L, 1);
+	src = (unsigned char *)luaL_checklstring(L, 2, &msgLen);
+	netWrite(fd, src, msgLen);
 	return 0;
 }
 
@@ -138,13 +142,14 @@ int luaopen_env(struct lua_State* L){
 	luaL_checkversion(L);
 
 	luaL_Reg l[] = {
-		{ "uuid", lc_uuid },
-		{ "sf_init", lc_snowflake_init },
-        { "sf_nextid", lc_snowflake_nextid },
-		{ "net_connect", lc_net_connect },
-		{ "net_listen", lc_net_listen },
-		{ "addTimer", lc_timer_add },
-		{ "delTimer", lc_timer_del },
+		{ "lc_uuid", lc_uuid },
+		{ "lc_sfInit", lc_snowflake_init },
+        { "lc_sfNextid", lc_snowflake_nextid },
+		{ "lc_netConnect", lc_net_connect },
+		{ "lc_netListen", lc_net_listen },
+		{ "lc_netSendMsg", lc_net_sendmsg },
+		{ "lc_addTimer", lc_timer_add },
+		{ "lc_delTimer", lc_timer_del },
 		{ NULL,  NULL }
 	};
 

@@ -12,72 +12,71 @@
 #include "ae.h"
 #include "anet.h"
 
-#define LL_DEBUG 0
-#define LL_VERBOSE 1
-#define LL_NOTICE 2
-#define LL_WARNING 3
+#include "log.h"
+#include "msgbuf.h"
 
-static inline void serverLog(int level, const char *fmt, ...) {
-	va_list ap;
-	char msg[1024];
-
-	va_start(ap, fmt);
-	vsnprintf(msg, sizeof(msg), fmt, ap);
-	va_end(ap);
-	printf("[log][%d]:%s\n",level, msg);
-}
+#define NEW_SESSION(i) do { \
+	netSession * ses = (netSession*)malloc(sizeof(netSession)); \
+	ses->id = (i);\
+	ses->input = newBuf(1024);\
+	ses->output = newBuf(1024);\
+	ses->next = NULL;\
+	pushFree(ses);\
+} while(0)
 
 // 整个包长度|flag预留|from type|from id|to type|to id|协议号|消息内容
-struct msgBuff{
+// 紧凑模式（即不对齐内存）
+typedef struct __attribute__ ((__packed__)) msgPack{
 	int len;
 	int flag;
-	char fromType;
-	unsigned char fromId;
-	char toType;
-	unsigned char toId;
 	unsigned int cmd;
+	char fromType;
+	char toType;
+	unsigned char fromId;
+	unsigned char toId;
 	char buf[];
-};
+} msgPack;
 
 // 网络会话
 typedef struct netSession{
 	unsigned int id;			// 连接id
+	char *ip;					// 连接ip
 	int port;					// 连接端口
 	int fd;						// fd
-	unsigned int usedlen; 		// in buf 未处理完的数据长度
-	unsigned int buflen;		// buf 总长度
-	unsigned int outlen;		// out buf总长度
-	unsigned int remainlen;		// out buf剩余数据的长度
-	char * ip;					// 连接ip
-	char * querybuf;			// input buf
-	char * outbuf;				// output buf
-	struct netSession * next;
+	msgBuf *input;
+	msgBuf *output;
+	struct netSession *next;
 } netSession;
 
+typedef struct sessionList{
+	netSession * head;
+	netSession * tail;
+	int count;
+} sessionList;
+
 typedef struct appServer{
-	unsigned int nextClientId;
-	char *bindaddr;
-	short port;
-	int size;
+	int maxSize;
 	char err[1024];
-	char neterr[1024];
-	char family;				// 进程类型
-	unsigned char index; 		// 进程编号 0-255
+	char sty;					// 进程类型
+	unsigned char sid; 			// 进程编号 0-255
 	int tcpkeepalive;
-	netSession * sessionHead;	// 会话列表头
+	netSession **session;		// 会话列表(maxSize个)
+	sessionList freelist;		// 空闲的session列表
 
 	lua_State *L;
 	aeEventLoop *pEl;
 } appServer;
 
 
-int createApp();
+int createApp(const char * sty, int sid);
 int runApp();
 
-netSession * createSession(int fd);
-int freeSession(netSession * session);
+netSession * createSession(int fd, const char *ip, short port);
+void freeSession(netSession * session);
+void pushFree(netSession * session);
 
 // net api
 int netListen(int port, char * addr);
 int netConnect(char * addr, int port);
+void netWrite(int fd, char * buf, int len);
 #endif

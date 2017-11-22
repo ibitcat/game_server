@@ -29,11 +29,23 @@ static int ltraceback(lua_State *L){
 	return 1;
 }
 
-int createApp(){
+int createApp(const char * sty, int sid){
+	// app
+	app.maxSize = 1024;
+	app.sty = sty[1];
+	app.sid = sid;
+	app.session = (netSession**)malloc(app.maxSize * sizeof(netSession*));
+	memset(&app.freelist, 0, sizeof(sessionList));
+
+	for (int i = 1; i <= app.maxSize; ++i){
+		NEW_SESSION(i);
+	}
+
+	// lua
 	lua_State *L = luaL_newstate();
 	luaL_openlibs(L);  // 加载Lua通用扩展库
 	app.L = L;
-	app.pEl = aeCreateEventLoop(1024*10);
+	app.pEl = aeCreateEventLoop(app.maxSize);
 	app.nextClientId = 0;
 
 	// upvalue
@@ -50,7 +62,9 @@ int createApp(){
 	// load main.lua
 	lua_pushcfunction(L, ltraceback);
 	assert(lua_gettop(L) == 1);
-	int r = luaL_loadfile(L,"../main.lua");
+	char tmp[64];
+	sprintf(tmp,"../src/l-src/%c/main.lua",app.sty);
+	int r = luaL_loadfile(L,tmp);
 	if (r != LUA_OK) {
 		printf("load lua file fail, err = %s\n", lua_tostring(L,-1));
 		return 1;

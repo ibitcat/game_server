@@ -14,7 +14,12 @@ postgre sql 驱动
 
 int main(int argc, char** argv)
 {
-	createApp();
+	printf("argc = %d\n", argc);
+	for (int i = 0; i < argc; ++i){
+		printf("argv = %s\n", argv[i]);
+	}
+	printf("--------------> server start <--------------\n");
+	createApp(argv[1], 1);
 	runApp();
 	return 0;
 }
