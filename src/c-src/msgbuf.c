@@ -6,14 +6,14 @@
 #include "log.h"
 
 msgBuf * expandBuf(msgBuf *mbuf, int newcap){
-	assert(size>0);
+	assert(newcap>0);
 	if (mbuf->size > newcap){
 		serverLog(0,"newcap is wrong value");
 		return mbuf;
 	}
 
 	int total = sizeof(msgBuf)+newcap;
-	msgBuf * newbuf = (msgBuf *)realloc(total);
+	msgBuf * newbuf = (msgBuf *)realloc(mbuf, total);
 	newbuf->cap = newcap;
 	return newbuf;
 }

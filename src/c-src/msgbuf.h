@@ -10,8 +10,8 @@ typedef struct msgBuf{
 } msgBuf;
 
 static inline void cleanBuf(msgBuf *mbuf){
-	memset(mbuf->buf, 0, mbuf->len);
-	mbuf->used = 0;
+	memset(mbuf->buf, 0, mbuf->cap);
+	mbuf->size = 0;
 }
 
 msgBuf * newBuf(int cap);

@@ -27,8 +27,8 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 	checkInputBuf(session);
 
 	int readlen = 0;
-	msgBuf * inupt = session->input;
-	unsigned char * buf = getAvailableBuf(inupt, &readlen);
+	msgBuf * input = session->input;
+	unsigned char * buf = getAvailableBuf(input, &readlen);
 	if (buf==NULL){
 		serverLog(LL_VERBOSE, "input buff not enought");
 		return;
@@ -51,8 +51,8 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 
 	// 处理buf
 	int headLen = sizeof(msgPack);
-	unsigned char * head = inupt->buf;
-	int left = inupt->size;
+	unsigned char * head = input->buf;
+	int left = input->size;
 	lua_State *L = app.L;
 	while(left >= headLen){
 		msgPack * pkt = (msgPack *)head;
@@ -77,7 +77,7 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 		lua_pushinteger(L,pkt->toId);
 		lua_pcall(L,6,0,0);
 	}
-	readBuf(inupt, inupt->used - left);
+	readBuf(input, input->size - left);
 }
 
 void writeToSession(aeEventLoop *el, int fd, void *privdata, int mask) {

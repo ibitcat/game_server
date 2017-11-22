@@ -1,6 +1,8 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 
+#include <stdarg.h>
+
 #define LL_DEBUG 0
 #define LL_VERBOSE 1
 #define LL_NOTICE 2

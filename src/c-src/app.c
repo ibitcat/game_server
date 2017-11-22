@@ -46,7 +46,6 @@ int createApp(const char * sty, int sid){
 	luaL_openlibs(L);  // 加载Lua通用扩展库
 	app.L = L;
 	app.pEl = aeCreateEventLoop(app.maxSize);
-	app.nextClientId = 0;
 
 	// upvalue
 	lua_pushlightuserdata(L, &app);
