@@ -22,8 +22,8 @@ static int ltraceback(lua_State *L){
 	const char *msg = lua_tostring(L, 1);
 	if (msg){
 		luaL_traceback(L, L, msg, 1);
+		serverLog(0, "[LUA ERROR]%s\n", lua_tostring(L, -1));
 	}else {
-		printf("lua traceback\n");
 		lua_pushliteral(L, "(no error message)");
 	}
 	return 1;
@@ -39,12 +39,12 @@ int createApp(const char * sty, int sid){
 	for (int i = 0; i < app.maxSize; ++i){
 		NEW_SESSION(i);
 	}
+	app.pEl = aeCreateEventLoop(app.maxSize);
 
 	// lua
 	lua_State *L = luaL_newstate();
 	luaL_openlibs(L);  // 加载Lua通用扩展库
 	app.L = L;
-	app.pEl = aeCreateEventLoop(app.maxSize);
 
 	// upvalue
 	lua_pushlightuserdata(L, &app);
@@ -58,20 +58,18 @@ int createApp(const char * sty, int sid){
 	}
 
 	// load main.lua
-	lua_pushcfunction(L, ltraceback);
-	assert(lua_gettop(L) == 1);
 	char tmp[64];
+	lua_pushcfunction(L, ltraceback);
+	app.luaErrPos = lua_gettop(L);
 	sprintf(tmp,"../src/l-src/%c/main.lua",app.sty);
 	int r = luaL_loadfile(L,tmp);
 	if (r != LUA_OK) {
-		printf("load lua file fail, err = %s\n", lua_tostring(L,-1));
-		return 1;
+		serverLog(0, "load lua file fail, err = %s", lua_tostring(L,-1));
+		return -1;
 	}
-
-	r = lua_pcall(L,0,0,0);
+	r = lua_pcall(L, 0, 0, app.luaErrPos);
 	if (r != LUA_OK) {
-		printf("lua loader error : %s\n", lua_tostring(L, -1));
-		return 1;
+		return -1;
 	}
 	return 0;
 };

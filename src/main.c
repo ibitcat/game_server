@@ -19,7 +19,8 @@ int main(int argc, char** argv)
 		printf("argv = %s\n", argv[i]);
 	}
 	printf("--------------> server start <--------------\n");
-	createApp(argv[1], 1);
-	runApp();
+	if (createApp(argv[1], 1)==0){
+		runApp();
+	}
 	return 0;
 }

@@ -10,7 +10,6 @@
 #include "app.h"
 
 static int ltimeCallback(uint32_t id, void *clientData){
-	printf("ltimeCallback : timer id = %d\n", id);
 	appServer *app = (appServer *)clientData;
 	lua_State *L = app->L;
 
@@ -18,11 +17,10 @@ static int ltimeCallback(uint32_t id, void *clientData){
 	int rType = lua_getglobal(L,"onTimer");
 	int status = lua_pcall(L,0,1,0);
 	if (status != LUA_OK) {
-		printf("timer cb err = %s\n", lua_tostring(L,-1));
+		serverLog(0, "timer cb err = %s", lua_tostring(L,-1));
 		return;
 	}else{
 		if (lua_isinteger(L,-1)){
-			//printf("onTimer result = %d\n",lua_tointeger(L,-1));
 		}
 	}
 	lua_settop(L,top);
@@ -103,7 +101,6 @@ static int lc_net_listen(lua_State *L){
 }
 
 static int lc_net_sendmsg(lua_State *L){
-	// lua_sendMsg(fd,toTy,toId,cmd,pkt,pid);
 	size_t msgLen = 0;
 	unsigned char * buf = NULL;
 	int fd = luaL_checkinteger(L, 1);
@@ -123,7 +120,6 @@ static int lc_net_sendmsg(lua_State *L){
 		memcpy(pkt->buf, buf, msgLen);
 	}
 
-	printf("send msg = %s\n", buf);
 	netWrite(fd, pkt);
 	return 0;
 }

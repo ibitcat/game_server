@@ -54,6 +54,7 @@ typedef struct appServer{
 	unsigned char sid; 			// 进程编号 0-255
 	int tcpkeepalive;
 	netSession **session;		// 会话列表(maxSize个)
+	int luaErrPos;
 
 	lua_State *L;
 	aeEventLoop *pEl;
@@ -66,10 +67,10 @@ int runApp();
 netSession * createSession(int fd, const char *ip, short port);
 netSession * getSession(int fd);
 void closeSession(netSession * session);
-void flushSession(netSession * session);
+int flushSession(netSession * session);
 
 // net api
 int netListen(int port, char * addr);
 int netConnect(char * addr, int port);
-void netWrite(int fd, msgPack *pkt);
+int netWrite(int fd, msgPack *pkt);
 #endif

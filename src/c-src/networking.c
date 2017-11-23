@@ -12,6 +12,9 @@ extern appServer app;
 void cl_handle_msg(int fd, msgPack * pkt){
 	// lua_handleMsg(fd,cmd,fromTy,fromId,toTy,toId,pkt);
 	lua_State *L = app.L;
+	int top = lua_gettop(L);
+
+	lua_pushvalue(L, app.luaErrPos);
 	lua_getglobal(L, "cl_handleMsg");
 	lua_pushinteger(L, fd);
 	lua_pushinteger(L, pkt->cmd);
@@ -20,7 +23,9 @@ void cl_handle_msg(int fd, msgPack * pkt){
 	lua_pushinteger(L, pkt->toType);
 	lua_pushinteger(L, pkt->toId);
 	lua_pushlstring(L, pkt->buf, pkt->len - sizeof(msgPack));
-	lua_pcall(L,7,0,0);
+	lua_pcall(L,7,0,1);
+
+	lua_settop(L, top);
 }
 
 void cl_accpeted(int fd){
@@ -43,13 +48,14 @@ static int readMsgbuff(netSession * session){
 			return -1;
 		}
 	} else if (nread == 0) {
-		serverLog(LL_VERBOSE, "Client closed connection");
+		serverLog(LL_VERBOSE, "connection closed, fd = %d", session->fd);
 		return -1;
 	}
 	input->size += nread;
 	return nread;
 }
 
+// 返回值>=0表示写入ok
 static int writeMsgbuff(netSession * session){
 	int fd = session->fd;
 	if (fd<0) return -1;
@@ -114,7 +120,10 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 static void writeToSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 	netSession * session = getSession(fd);
 	if (session){
-		flushSession(session);
+		int ok = flushSession(session);
+		if (ok!=0){
+			closeSession(session);
+		}
 	}
 }
 
@@ -130,7 +139,6 @@ static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) 
 		return;
 	}
 
-	printf("Accepted %s:%d \n", cip, cport);
 	// 处理接收到fd
 	netSession * session = createSession(cfd, cip, cport);
 	if (session==NULL){
@@ -183,13 +191,9 @@ netSession * getSession(int fd){
 	return session;
 }
 
-void flushSession(netSession * session){
+int flushSession(netSession * session){
 	int left = writeMsgbuff(session);
-	if (left<0){
-		/* close socket */
-		closeSession(session);
-		return;
-	}
+	if (left<0) return -1;
 
 	readBuf(session->output, session->output->size - left);
 	int mask = aeGetFileEvents(app.pEl, session->fd);
@@ -202,13 +206,16 @@ void flushSession(netSession * session){
 			aeCreateFileEvent(app.pEl, session->fd, AE_WRITABLE, writeToSession, NULL);
 		}
 	}
+	return 0;
 }
 
 void closeSession(netSession * session){
 	// 清空
 	int fd = session->fd;
 	if (fd>=0){
+		flushSession(session);
 		aeDeleteFileEvent(app.pEl, fd, AE_READABLE|AE_WRITABLE);
+		close(fd);
 	}
 
 	session->port = 0;
@@ -252,13 +259,17 @@ int netConnect(char * addr, int port){
 	return fd;
 }
 
-void netWrite(int fd, msgPack * pkt){
+int netWrite(int fd, msgPack * pkt){
 	netSession * session = getSession(fd);
 	if(session==NULL){
 		serverLog(0,"session not found,fd = %d", fd);
-		return;
+		return -1;
 	}
 
 	writeToBuf(session->output, (unsigned char *)pkt, pkt->len);
-	flushSession(session);
+	int ok = flushSession(session);
+	if (ok!=0){
+		closeSession(session);
+	}
+	return ok;
 }
