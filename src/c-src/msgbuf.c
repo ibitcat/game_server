@@ -5,55 +5,56 @@
 #include "msgbuf.h"
 #include "log.h"
 
-msgBuf * expandBuf(msgBuf *mbuf, int newcap){
-	assert(newcap>0);
-	if (mbuf->size > newcap){
-		serverLog(0,"newcap is wrong value");
-		return mbuf;
-	}
-
-	int total = sizeof(msgBuf)+newcap;
-	msgBuf * newbuf = (msgBuf *)realloc(mbuf, total);
-	newbuf->cap = newcap;
-	return newbuf;
-}
-
 msgBuf * newBuf(int cap){
 	assert(cap>0);
-	int total = sizeof(msgBuf)+cap;
-	msgBuf * mbuf = (msgBuf *)malloc(total);
+	msgBuf * mbuf = (msgBuf *)malloc(sizeof(msgBuf));
 	if (mbuf==NULL){
 		serverLog(0,"newBuf fail");
 		return NULL;
 	}
-	memset(mbuf, 0, total);
+	mbuf->buf = (unsigned char *)malloc(cap);
+	memset(mbuf->buf, 0, cap);
 	mbuf->cap = cap;
+	mbuf->size = 0;
 
 	return mbuf;
 }
 
-void writeToBuf(msgBuf *mbuf, unsigned char * inbuf, int inlen){
-	if (inlen<=0){
+void expandBuf(msgBuf *mbuf, int newcap){
+	assert(newcap>0);
+	if (mbuf->size > newcap){
+		serverLog(0,"newcap is wrong value");
 		return;
 	}
 
-	int total = mbuf->size + inlen;
-	assert(total<=mbuf->cap);
+	mbuf->buf = (unsigned char *)realloc(mbuf->buf, newcap);
+	mbuf->cap = newcap;
+}
+
+void writeToBuf(msgBuf *mbuf, unsigned char * inbuf, int inlen){
+	if (inlen<=0) return;
+
+	int free = mbuf->cap - mbuf->size;
+	if (inlen > free){
+		int n = inlen/1024 + 1;
+		expandBuf(mbuf, mbuf->cap + 1024*n);
+		free = mbuf->cap - mbuf->size;
+	}
 
 	memcpy(mbuf->buf + mbuf->size, inbuf, inlen);
 	mbuf->size += inlen;
 }
 
-unsigned char * getAvailableBuf(msgBuf *mbuf, int *len){
+unsigned char * getFreeBuf(msgBuf *mbuf, int *len){
 	int free = mbuf->cap - mbuf->size;
-	if (free>0){
-		unsigned char * buf = mbuf->buf + mbuf->size;
-		*len = free;
-		return buf;
-	}else{
-		*len = -1;
+	if (free<=0){
+		int newcap = mbuf->cap * 2; // 扩大两倍
+		expandBuf(mbuf, newcap);
 	}
-	return NULL;
+
+	free = mbuf->cap - mbuf->size;
+	*len = free;
+	return mbuf->buf + mbuf->size;
 }
 
 void readBuf(msgBuf *mbuf, int readed){

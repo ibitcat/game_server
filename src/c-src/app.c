@@ -32,12 +32,11 @@ static int ltraceback(lua_State *L){
 int createApp(const char * sty, int sid){
 	// app
 	app.maxSize = 1024;
-	app.sty = sty[1];
+	app.sty = sty[0];
 	app.sid = sid;
+	memset(app.err, 0, sizeof(app.err));
 	app.session = (netSession**)malloc(app.maxSize * sizeof(netSession*));
-	memset(&app.freelist, 0, sizeof(sessionList));
-
-	for (int i = 1; i <= app.maxSize; ++i){
+	for (int i = 0; i < app.maxSize; ++i){
 		NEW_SESSION(i);
 	}
 
@@ -69,7 +68,7 @@ int createApp(const char * sty, int sid){
 		return 1;
 	}
 
-	r = lua_pcall(L,0,0,1);
+	r = lua_pcall(L,0,0,0);
 	if (r != LUA_OK) {
 		printf("lua loader error : %s\n", lua_tostring(L, -1));
 		return 1;

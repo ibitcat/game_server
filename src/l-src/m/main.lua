@@ -8,7 +8,9 @@ if fd>0 then
 end
 
 --c call lua
-function cl_handleMsg(fd,cmd,fromType,fromId,toType,toId)
+function cl_handleMsg(fd,cmd,fromType,fromId,toType,toId, msg)
 	-- body
-	print(fd,cmd,fromType,fromId,toType,toId)
+	print(fd,cmd,string.char(fromType),fromId,string.char(toType),toId, msg)
+
+	--env.lc_netSendMsg(fd,"hello from m")
 end

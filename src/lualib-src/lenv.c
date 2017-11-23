@@ -105,10 +105,26 @@ static int lc_net_listen(lua_State *L){
 static int lc_net_sendmsg(lua_State *L){
 	// lua_sendMsg(fd,toTy,toId,cmd,pkt,pid);
 	size_t msgLen = 0;
-	unsigned char * src = NULL;
+	unsigned char * buf = NULL;
 	int fd = luaL_checkinteger(L, 1);
-	src = (unsigned char *)luaL_checklstring(L, 2, &msgLen);
-	netWrite(fd, src, msgLen);
+	buf = (unsigned char *)luaL_checklstring(L, 2, &msgLen);
+
+	int headLen = sizeof(struct msgPack);
+	int totalLen = headLen + msgLen;
+	msgPack * pkt = (msgPack *)malloc(totalLen);
+	pkt->len = totalLen;
+	pkt->flag = 777;
+	pkt->cmd = 1001;
+	pkt->fromType = 'a';
+	pkt->toType = 'b';
+	pkt->fromId = 11;
+	pkt->toId = 22;
+	if (msgLen>0 && buf){
+		memcpy(pkt->buf, buf, msgLen);
+	}
+
+	printf("send msg = %s\n", buf);
+	netWrite(fd, pkt);
 	return 0;
 }
 

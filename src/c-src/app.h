@@ -17,11 +17,12 @@
 
 #define NEW_SESSION(i) do { \
 	netSession * ses = (netSession*)malloc(sizeof(netSession)); \
-	ses->id = (i);\
+	ses->fd = -1;\
+	ses->port = 0;\
+	ses->ip = NULL;\
 	ses->input = newBuf(1024);\
 	ses->output = newBuf(1024);\
-	ses->next = NULL;\
-	pushFree(ses);\
+	app.session[(i)] = ses;\
 } while(0)
 
 // 整个包长度|flag预留|from type|from id|to type|to id|协议号|消息内容
@@ -39,20 +40,12 @@ typedef struct __attribute__ ((__packed__)) msgPack{
 
 // 网络会话
 typedef struct netSession{
-	unsigned int id;			// 连接id
+	int fd;						// fd
 	char *ip;					// 连接ip
 	int port;					// 连接端口
-	int fd;						// fd
 	msgBuf *input;
 	msgBuf *output;
-	struct netSession *next;
 } netSession;
-
-typedef struct sessionList{
-	netSession * head;
-	netSession * tail;
-	int count;
-} sessionList;
 
 typedef struct appServer{
 	int maxSize;
@@ -61,7 +54,6 @@ typedef struct appServer{
 	unsigned char sid; 			// 进程编号 0-255
 	int tcpkeepalive;
 	netSession **session;		// 会话列表(maxSize个)
-	sessionList freelist;		// 空闲的session列表
 
 	lua_State *L;
 	aeEventLoop *pEl;
@@ -72,11 +64,12 @@ int createApp(const char * sty, int sid);
 int runApp();
 
 netSession * createSession(int fd, const char *ip, short port);
-void freeSession(netSession * session);
-void pushFree(netSession * session);
+netSession * getSession(int fd);
+void closeSession(netSession * session);
+void flushSession(netSession * session);
 
 // net api
 int netListen(int port, char * addr);
 int netConnect(char * addr, int port);
-void netWrite(int fd, char * buf, int len);
+void netWrite(int fd, msgPack *pkt);
 #endif

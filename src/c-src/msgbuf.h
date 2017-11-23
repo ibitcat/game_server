@@ -6,7 +6,7 @@
 typedef struct msgBuf{
 	unsigned int cap;		// buf容量
 	unsigned int size;		// buf已使用的大小
-	unsigned char buf[];
+	unsigned char *buf;
 } msgBuf;
 
 static inline void cleanBuf(msgBuf *mbuf){

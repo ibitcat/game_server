@@ -23,10 +23,10 @@ local fd = env.lc_netListen("127.0.0.1",7777)
 print("lua call listen, fd  = ", fd)
 
 --c call lua
-function cl_handleMsg(fd,cmd,fromType,fromId,toType,toId)
+function cl_handleMsg(fd,cmd,fromType,fromId,toType,toId, msg)
 	-- body
-	print(fd,cmd,fromType,fromId,toType,toId)
+	print(fd,cmd,string.char(fromType),fromId,string.char(toType),toId, msg)
 
 	-- 回写
-	lc_netSendMsg(fd,"hello")
+	env.lc_netSendMsg(fd,"reply from g")
 end
