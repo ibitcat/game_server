@@ -15,7 +15,7 @@ static inline void serverLog(int level, const char *fmt, ...) {
 	va_start(ap, fmt);
 	vsnprintf(msg, sizeof(msg), fmt, ap);
 	va_end(ap);
-	printf("[log][%d]:%s\n",level, msg);
+	printf("[log-%d]:%s\n",level, msg);
 }
 
 

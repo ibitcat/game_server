@@ -9,13 +9,12 @@
 extern appServer app;
 
 /* =========================== c call lua =========================== */
-void cl_handle_msg(int fd, msgPack * pkt){
+void cl_handlePkt(int fd, msgPack * pkt){
 	// lua_handleMsg(fd,cmd,fromTy,fromId,toTy,toId,pkt);
 	lua_State *L = app.L;
 	int top = lua_gettop(L);
-
 	lua_pushvalue(L, app.luaErrPos);
-	lua_getglobal(L, "cl_handleMsg");
+	lua_getglobal(L, "cl_onHandlePkt");
 	lua_pushinteger(L, fd);
 	lua_pushinteger(L, pkt->cmd);
 	lua_pushinteger(L, pkt->fromType);
@@ -24,12 +23,37 @@ void cl_handle_msg(int fd, msgPack * pkt){
 	lua_pushinteger(L, pkt->toId);
 	lua_pushlstring(L, pkt->buf, pkt->len - sizeof(msgPack));
 	lua_pcall(L,7,0,1);
-
 	lua_settop(L, top);
 }
 
-void cl_accpeted(int fd){
+void cl_netAccpeted(int fd){
+	lua_State *L = app.L;
+	int top = lua_gettop(L);
+	lua_pushvalue(L, app.luaErrPos);
+	lua_getglobal(L, "cl_onNetAccpeted");
+	lua_pushinteger(L, fd);
+	lua_pcall(L,1,0,1);
+	lua_settop(L, top);
+}
 
+void cl_netConnected(int fd){
+	lua_State *L = app.L;
+	int top = lua_gettop(L);
+	lua_pushvalue(L, app.luaErrPos);
+	lua_getglobal(L, "cl_onNetConnected");
+	lua_pushinteger(L, fd);
+	lua_pcall(L,1,0,1);
+	lua_settop(L, top);
+}
+
+void cl_netClosed(int fd){
+	lua_State *L = app.L;
+	int top = lua_gettop(L);
+	lua_pushvalue(L, app.luaErrPos);
+	lua_getglobal(L, "cl_onNetClosed");
+	lua_pushinteger(L, fd);
+	lua_pcall(L,1,0,1);
+	lua_settop(L, top);
 }
 
 /* =========================== static func =========================== */
@@ -64,7 +88,7 @@ static int writeMsgbuff(netSession * session){
 	unsigned char * head = session->output->buf;
 	int wlen = 0;
 	while(left>0){
-		int nwritten = anetWrite(fd, head+wlen, left);
+		int nwritten = write(fd, head+wlen, left);
 		if (nwritten>0){
 			left -= nwritten;
 			wlen += nwritten;
@@ -81,7 +105,7 @@ static int writeMsgbuff(netSession * session){
 			return -2;
 		}
 	}
-	return left;
+	return wlen;
 }
 
 /* =========================== file event callback =========================== */
@@ -147,7 +171,7 @@ static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) 
 	}
 
 	// 告诉lua层
-	cl_accpeted(fd);
+	cl_netAccpeted(fd);
 }
 
 /* =========================== net api =========================== */
@@ -172,7 +196,7 @@ netSession * createSession(int fd, const char *ip, short port){
 		}
 
 		if (aeCreateFileEvent(app.pEl, fd, AE_READABLE, readFromSession, NULL) == AE_ERR){
-			closeSession(session);
+			freeSession(session);
 			return NULL;
 		}
 	}
@@ -209,7 +233,7 @@ int flushSession(netSession * session){
 	return 0;
 }
 
-void closeSession(netSession * session){
+static int freeSession(netSession * session){
 	// 清空
 	int fd = session->fd;
 	if (fd>=0){
@@ -217,6 +241,7 @@ void closeSession(netSession * session){
 		aeDeleteFileEvent(app.pEl, fd, AE_READABLE|AE_WRITABLE);
 		close(fd);
 	}
+	serverLog(0,"close session");
 
 	session->port = 0;
 	session->ip = NULL;
@@ -224,6 +249,12 @@ void closeSession(netSession * session){
 
 	cleanBuf(session->input);
 	cleanBuf(session->output);
+	return fd;
+}
+
+void closeSession(netSession * session){
+	int fd = freeSession(session);
+	cl_netClosed(fd);
 }
 
 int netListen(int port, char * addr){

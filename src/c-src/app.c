@@ -71,6 +71,8 @@ int createApp(const char * sty, int sid){
 	if (r != LUA_OK) {
 		return -1;
 	}
+
+	// 通知lua，初始化ok
 	return 0;
 };
 
