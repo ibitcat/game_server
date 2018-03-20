@@ -1,3 +1,3 @@
 *.sublime*
-.xmake
+.o
 build
