@@ -18,7 +18,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	gcc -g -Wall $(OBJS) -o $@ -ldl -lm
-	#rm -rf $(OBJS) $(TARGET).core
+#	rm -rf $(OBJS) $(TARGET).core
 
 %.o: %.c
 	gcc $(CFLAGS) -fPIC $< -o $@
