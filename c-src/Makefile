@@ -17,7 +17,7 @@ all: $(TARGET)
 .PHONY: all
 
 $(TARGET): $(OBJS)
-	gcc -g -Wall $(OBJS) -o $@ -ldl -lm
+	gcc -g -Wall $(OBJS) -o $@ -lc -ldl -lm
 #	rm -rf $(OBJS) $(TARGET).core
 
 %.o: %.c
