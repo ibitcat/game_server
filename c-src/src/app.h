@@ -15,6 +15,9 @@
 #include "log.h"
 #include "msgbuf.h"
 
+
+#define REG_LUA_FUNC(ety) {regLuafunc(#ety, (ety));}
+
 #define NEW_SESSION(i) do { \
 	netSession * ses = (netSession*)malloc(sizeof(netSession)); \
 	ses->fd = -1;\
@@ -24,6 +27,13 @@
 	ses->output = newBuf(1024);\
 	app.session[(i)] = ses;\
 } while(0)
+
+// lua注册到c的接口
+enum event_ty {
+	c2s = 0,
+
+	event_ty_max
+};
 
 // 整个包长度|flag预留|from type|from id|to type|to id|协议号|消息内容
 // 紧凑模式（即不对齐内存）
@@ -55,6 +65,7 @@ typedef struct appServer{
 	int tcpkeepalive;
 	netSession **session;		// 会话列表(maxSize个)
 	int luaErrPos;
+	int ev_handler[event_ty_max];
 
 	lua_State *L;
 	aeEventLoop *pEl;

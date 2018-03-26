@@ -7,17 +7,17 @@
 
 typedef struct msgBuf{
 	unsigned int cap;		// buf容量
-	unsigned int size;		// buf已使用的大小
+	unsigned int used;		// buf已使用的大小
 	unsigned char *buf;
 } msgBuf;
 
 static inline void cleanBuf(msgBuf *mbuf){
 	memset(mbuf->buf, 0, mbuf->cap);
-	mbuf->size = 0;
+	mbuf->used = 0;
 }
 
 msgBuf * newBuf(int cap);
-void readFromBuf(msgBuf *msgbuf);
-void writeToBuf(msgBuf *msgbuf, unsigned char * inbuf, int inlen);
+void appendBuf(msgBuf *msgbuf, unsigned char * inbuf, int inlen);
+void trimBuf(msgBuf *msgbuf, int readed);
 
 #endif

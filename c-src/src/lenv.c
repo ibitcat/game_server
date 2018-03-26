@@ -1,13 +1,8 @@
 #include <stdio.h>
 #include <errno.h>
 
-// uuid
-#include "uuid.h"
-#include "lbase64.h"
-#include "lsnowflake.h"
-
 #include "lenv.h"
-#include "../game-src/app.h"
+#include "app.h"
 
 static int ltimeCallback(uint32_t id, void *clientData){
 	appServer *app = (appServer *)clientData;

@@ -2,6 +2,7 @@
 #define _LOG_H_
 
 #include <stdarg.h>
+#include <stdio.h>
 
 #define LL_DEBUG 0
 #define LL_VERBOSE 1

@@ -3,7 +3,7 @@
 //#include <unistd.h> usleep 头文件
 
 #include "app.h"
-#include "../clua-src/lenv.h"
+#include "lenv.h"
 
 appServer app;
 
@@ -29,6 +29,19 @@ static int ltraceback(lua_State *L){
 	return 1;
 }
 
+// 注册lua全局函数
+int regLuafunc(const char* name, enum event_ty ety){
+	assert(ety < event_ty_max);
+	int luaType = lua_getglobal(app.L, name);
+	if (luaType!=LUA_TFUNCTION) {
+		printf("cannot locate handle:'%s'", name);
+		return -1;
+	} else{
+		app.ev_handler[ety] = lua_gettop(app.L);
+	}
+	return 0;
+}
+
 int createApp(const char * sty, int sid){
 	// app
 	app.maxSize = 1024;
@@ -40,6 +53,7 @@ int createApp(const char * sty, int sid){
 		NEW_SESSION(i);
 	}
 	app.pEl = aeCreateEventLoop(app.maxSize);
+	memset(app.ev_handler, 0, sizeof(app.ev_handler));
 
 	// lua
 	lua_State *L = luaL_newstate();
@@ -61,7 +75,7 @@ int createApp(const char * sty, int sid){
 	char tmp[64];
 	lua_pushcfunction(L, ltraceback);
 	app.luaErrPos = lua_gettop(L);
-	sprintf(tmp,"../src/l-src/%c/main.lua",app.sty);
+	sprintf(tmp,"../l-src/%c/main.lua",app.sty);
 	int r = luaL_loadfile(L,tmp);
 	if (r != LUA_OK) {
 		serverLog(0, "load lua file fail, err = %s", lua_tostring(L,-1));
@@ -71,6 +85,9 @@ int createApp(const char * sty, int sid){
 	if (r != LUA_OK) {
 		return -1;
 	}
+
+	// 注册lua函数到C
+	REG_LUA_FUNC(c2s)
 
 	// 通知lua，初始化ok
 	return 0;

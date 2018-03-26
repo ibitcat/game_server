@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <unistd.h> // for close
 
 #include "app.h"
 #include "msgbuf.h"
@@ -75,18 +76,20 @@ static int readMsgbuff(netSession * session){
 		serverLog(LL_VERBOSE, "connection closed, fd = %d", session->fd);
 		return -1;
 	}
-	input->size += nread;
+	input->used += nread;
 	return nread;
 }
 
-// 返回值>=0表示写入ok
+// 返回值>=0表示写入ok，一次性把buf内的字节全部写完
+// TODO：可优化
 static int writeMsgbuff(netSession * session){
 	int fd = session->fd;
 	if (fd<0) return -1;
 
-	int left = session->output->size;
-	unsigned char * head = session->output->buf;
 	int wlen = 0;
+	msgBuf * output = session->output;
+	unsigned char * head = output->buf;
+	int left = output->used;
 	while(left>0){
 		int nwritten = write(fd, head+wlen, left);
 		if (nwritten>0){
@@ -105,6 +108,9 @@ static int writeMsgbuff(netSession * session){
 			return -2;
 		}
 	}
+	if (wlen>0){
+		trimBuf(output, output->used - wlen);
+	}
 	return wlen;
 }
 
@@ -122,20 +128,21 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 		int headLen = sizeof(msgPack);
 		msgBuf * input = session->input;
 		unsigned char * head = input->buf;
-		int left = input->size;
+		int left = input->used; // 剩余可读长度
 		while(left >= headLen){
 			msgPack * pkt = (msgPack *)head;
 			assert(pkt->len >= headLen); // 检查len是否合法
-			if (pkt->len > input->size){
+			if (pkt->len > input->used){
 				/* 不够一个包 */
 				break;
 			}else{
 				head += pkt->len;
 				left -= pkt->len;
+				printf("dadada\n");
+				cl_handlePkt(fd, pkt);
 			}
-			//cl_handle_msg(fd, pkt);
 		}
-		readBuf(input, input->size - left);
+		trimBuf(input, input->used - left);
 	}else if (nread<0){
 		closeSession(session);
 	}
@@ -235,18 +242,18 @@ netSession * getSession(int fd){
 }
 
 int flushSession(netSession * session){
-	int left = writeMsgbuff(session);
-	if (left<0) return -1;
+	int wlen = writeMsgbuff(session); // 已经写入的长度
+	if (wlen<0) return -1;
 
-	readBuf(session->output, session->output->size - left);
 	int mask = aeGetFileEvents(app.pEl, session->fd);
-	if (left==0){
+	if (wlen==0){
 		if (mask & AE_WRITABLE){
 			aeDeleteFileEvent(app.pEl, session->fd, AE_WRITABLE);
 		}
-	}else if (left>0){
+	}else if (wlen>0){
 		if (!(mask & AE_WRITABLE)){
-			aeCreateFileEvent(app.pEl, session->fd, AE_WRITABLE, writeToSession, NULL);
+			// 如果发送未完，则注册write事件，继续发
+			// aeCreateFileEvent(app.pEl, session->fd, AE_WRITABLE, writeToSession, NULL);
 		}
 	}
 	return 0;
@@ -298,7 +305,7 @@ int netWrite(int fd, msgPack * pkt){
 		return -1;
 	}
 
-	writeToBuf(session->output, (unsigned char *)pkt, pkt->len);
+	appendBuf(session->output, (unsigned char *)pkt, pkt->len);
 	int ok = flushSession(session);
 	if (ok!=0){
 		closeSession(session);

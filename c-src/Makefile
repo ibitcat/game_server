@@ -8,7 +8,7 @@ INCLUDES=-I/usr/include\
 
 CFLAGS=-c -Wall -g $(INCLUDES)
 
-SRCDIRS=. ./3rd/libuuid-1.0.3 ./3rd/lua-5.3.4 ./clua-src ./game-src ./game-src/aev
+SRCDIRS=. ./3rd/libuuid-1.0.3 ./3rd/lua-5.3.4 ./src ./src/aev ./src/clua
 SRCS=$(foreach dir,$(SRCDIRS),$(wildcard $(dir)/*.c))
 OBJS=$(SRCS:.c=.o)
 TARGET=mmo

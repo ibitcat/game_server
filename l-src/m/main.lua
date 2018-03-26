@@ -7,10 +7,14 @@ if fd>0 then
 	env.lc_netSendMsg(fd,"client send msg")
 end
 
---c call lua
-function cl_handleMsg(fd,cmd,fromType,fromId,toType,toId, msg)
-	-- body
-	print(fd,cmd,string.char(fromType),fromId,string.char(toType),toId, msg)
+-- function c2s()
+-- 	print("fuck c2s……")
+-- end
 
-	--env.lc_netSendMsg(fd,"hello from m")
-end
+-- --c call lua
+-- function cl_onHandlePkt(fd,cmd,fromType,fromId,toType,toId, msg)
+-- 	-- body
+-- 	print(fd,cmd,string.char(fromType),fromId,string.char(toType),toId, msg)
+
+-- 	--env.lc_netSendMsg(fd,"hello from m")
+-- end
