@@ -3,6 +3,7 @@
 #include "game-src/app.h"
 
 /*
+lua与C注册
 uuid 完成
 snowflake 完成
 时间轮 完成

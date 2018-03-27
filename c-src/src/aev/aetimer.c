@@ -148,7 +148,7 @@ static void timer_exec(aeTimer *ti){
 	struct timer_node *pHead = list_clear(&ti->near[idx]);
 	while(pHead){
 		// 派发事件
-		printf("timer id = %d, starttime = %lld, curTime = %llu, diff= %d \n", pHead->id, startMsec, ti->currentMs, ti->currentMs-startMsec);
+		//printf("timer id = %d, starttime = %lld, curTime = %llu, diff= %d \n", pHead->id, startMsec, ti->currentMs, ti->currentMs-startMsec);
 		if (pHead->cb){
 			pHead->cb(pHead->id, pHead->clientData);
 		}
@@ -268,7 +268,6 @@ int32_t aeTimerUpdatetime(aeEventLoop * eventLoop) {
 	uint64_t cp = gettime();
 	int64_t diff = (int64_t)(cp - ti->currentMs);
 	if(diff<0) {
-		//skynet_error(NULL, "time diff error: change from %lld to %lld", cp, TI->current_point);
 		printf("fuck cp = %llu\n",cp);
 		ti->currentMs = cp - 10;
 		return 0;

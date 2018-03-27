@@ -30,7 +30,7 @@
 
 // lua注册到c的接口
 enum event_ty {
-	c2s = 0,
+	lc_c2s = 0,
 
 	event_ty_max
 };

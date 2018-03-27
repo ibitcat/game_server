@@ -39,5 +39,5 @@ function cl_onHandlePkt(fd,cmd,fromType,fromId,toType,toId, msg)
 	cfd = fd
 
 	-- 回写
-	--env.lc_addTimer(1*100)
+	env.lc_addTimer(1*100)
 end

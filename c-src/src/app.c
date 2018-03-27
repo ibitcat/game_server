@@ -87,7 +87,7 @@ int createApp(const char * sty, int sid){
 	}
 
 	// 注册lua函数到C
-	REG_LUA_FUNC(c2s)
+	REG_LUA_FUNC(lc_c2s)
 
 	// 通知lua，初始化ok
 	return 0;

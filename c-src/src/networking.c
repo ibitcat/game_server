@@ -73,7 +73,7 @@ static int readMsgbuff(netSession * session){
 			return -1;
 		}
 	} else if (nread == 0) {
-		serverLog(LL_VERBOSE, "connection closed, fd = %d", session->fd);
+		serverLog(LL_VERBOSE, "Connection closed, fd = %d", session->fd);
 		return -1;
 	}
 	input->used += nread;
@@ -109,7 +109,7 @@ static int writeMsgbuff(netSession * session){
 		}
 	}
 	if (wlen>0){
-		trimBuf(output, output->used - wlen);
+		trimBuf(output, wlen);
 	}
 	return wlen;
 }
@@ -138,7 +138,6 @@ static void readFromSession(aeEventLoop *el, int fd, void *privdata, int mask) {
 			}else{
 				head += pkt->len;
 				left -= pkt->len;
-				printf("dadada\n");
 				cl_handlePkt(fd, pkt);
 			}
 		}
