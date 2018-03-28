@@ -1,38 +1,9 @@
-﻿/* A simple event-driven programming library. Originally I wrote this code
- * for the Jim's event-loop (Jim is a Tcl interpreter) but later translated
- * it in form of a library for easy reuse.
- *
- * Copyright (c) 2006-2010, Salvatore Sanfilippo <antirez at gmail dot com>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright notice,
- *     this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *   * Neither the name of Redis nor the names of its contributors may be used
- *     to endorse or promote products derived from this software without
- *     specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+﻿// ae
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
@@ -45,285 +16,289 @@
 
 /* ======================= epoll api ======================= */
 typedef struct aeApiState {
-    int epfd;
-    struct epoll_event *events;
+	int epfd;
+	struct epoll_event *events; // epoll_wait需要的64个events
 } aeApiState;
 
 static int aeApiCreate(aeEventLoop *eventLoop) {
-    aeApiState *state = malloc(sizeof(aeApiState));
+	aeApiState *state = malloc(sizeof(aeApiState));
 
-    if (!state) return -1;
-    state->events = malloc(sizeof(struct epoll_event)*eventLoop->setsize);
-    if (!state->events) {
-        free(state);
-        return -1;
-    }
-    state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
-    if (state->epfd == -1) {
-        free(state->events);
-        free(state);
-        return -1;
-    }
-    eventLoop->apidata = state;
-    return 0;
+	if (!state) return -1;
+	state->events = malloc(sizeof(struct epoll_event)*AE_EPMAX);
+	if (!state->events) {
+		free(state);
+		return -1;
+	}
+
+	// Linux 2.6.8之后，size参数不使用，内核会动态调整大小，但是size必须>0
+	state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
+	if (state->epfd == -1) {
+		free(state->events);
+		free(state);
+		return -1;
+	}
+	eventLoop->apidata = state;
+	return 0;
 }
 
 static int aeApiResize(aeEventLoop *eventLoop, int setsize) {
-    aeApiState *state = eventLoop->apidata;
-
-    state->events = realloc(state->events, sizeof(struct epoll_event)*setsize);
-    return 0;
+	aeApiState *state = eventLoop->apidata;
+	state->events = realloc(state->events, sizeof(struct epoll_event)*setsize);
+	return 0;
 }
 
 static void aeApiFree(aeEventLoop *eventLoop) {
-    aeApiState *state = eventLoop->apidata;
+	aeApiState *state = eventLoop->apidata;
 
-    close(state->epfd);
-    free(state->events);
-    free(state);
+	close(state->epfd);
+	free(state->events);
+	free(state);
 }
 
-static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
-    aeApiState *state = eventLoop->apidata;
-    struct epoll_event ee = {0}; /* avoid valgrind warning */
-    /* If the fd was already monitored for some event, we need a MOD
-     * operation. Otherwise we need an ADD operation. */
-    int op = eventLoop->events[fd].mask == AE_NONE ?
-            EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask, void* ud) {
+	aeApiState *state = eventLoop->apidata;
+	struct epoll_event ee = {0};
+	ee.events = 0;
+	ee.data.ptr = ud; // data是一个union
 
-    ee.events = 0;
-    mask |= eventLoop->events[fd].mask; /* Merge old events */
-    if (mask & AE_READABLE) ee.events |= EPOLLIN;
-    if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
-    ee.data.fd = fd;
-    if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
-    return 0;
+	struct aeEvent *ae = (struct aeEvent *)ud;
+	int op = ae->mask == AE_NONE ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+	if (mask & AE_READABLE) ee.events |= EPOLLIN;
+	if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
+	if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
+	return 0;
 }
 
-static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
-    aeApiState *state = eventLoop->apidata;
-    struct epoll_event ee = {0}; /* avoid valgrind warning */
-    int mask = eventLoop->events[fd].mask & (~delmask);
+static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask, void* ud) {
+	aeApiState *state = eventLoop->apidata;
+	struct epoll_event ee = {0}; /* avoid valgrind warning */
+	ee.events = 0;
+	ee.data.ptr = ud;
 
-    ee.events = 0;
-    if (mask & AE_READABLE) ee.events |= EPOLLIN;
-    if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
-    ee.data.fd = fd;
-    if (mask != AE_NONE) {
-        epoll_ctl(state->epfd,EPOLL_CTL_MOD,fd,&ee);
-    } else {
-        /* Note, Kernel < 2.6.9 requires a non null event pointer even for
-         * EPOLL_CTL_DEL. */
-        epoll_ctl(state->epfd,EPOLL_CTL_DEL,fd,&ee);
-    }
+	int mask = ae.mask & (~delmask);
+	if (delmask==0){
+		mask = AE_NONE;
+	}
+	if (mask & AE_READABLE) ee.events |= EPOLLIN;
+	if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
+	if (mask != AE_NONE) {
+		epoll_ctl(state->epfd,EPOLL_CTL_MOD,fd,&ee);
+	} else {
+		epoll_ctl(state->epfd,EPOLL_CTL_DEL,fd,&ee);
+	}
 }
 
-static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
-    aeApiState *state = eventLoop->apidata;
-    int retval, numevents = 0;
+static int aeApiPoll(aeEventLoop *eventLoop, int ms) {
+	aeApiState *state = eventLoop->apidata;
+	int retval, numevents = 0;
 
-    retval = epoll_wait(state->epfd,state->events,eventLoop->setsize,
-            tvp ? (tvp->tv_sec*1000 + tvp->tv_usec/1000) : -1);
-    if (retval > 0) {
-        int j;
+	retval = epoll_wait(state->epfd, state->events, AE_EPMAX, ms);
+	if (retval > 0) {
+		numevents = retval;
+		for (int i = 0; i < numevents; i++) {
+			int mask = 0;
+			struct epoll_event *e = state->events+i;
 
-        numevents = retval;
-        for (j = 0; j < numevents; j++) {
-            int mask = 0;
-            struct epoll_event *e = state->events+j;
+			if (e->events & EPOLLIN) mask |= AE_READABLE;
+			if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
+			if (e->events & EPOLLERR) mask |= AE_ERROR;
+			if (e->events & EPOLLHUP) mask |= AE_ERROR;
 
-            if (e->events & EPOLLIN) mask |= AE_READABLE;
-            if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
-            if (e->events & EPOLLERR) mask |= AE_WRITABLE;
-            if (e->events & EPOLLHUP) mask |= AE_WRITABLE;
-            eventLoop->fired[j].fd = e->data.fd;
-            eventLoop->fired[j].mask = mask;
-        }
-    }
-    return numevents;
-}
-
-static char *aeApiName(void) {
-    return "epoll";
+			// 插入到eventloop中
+			eventLoop->epev[i].mask = mask;
+			eventLoop->epev[i].ud = e.data.ptr;
+		}
+	}
+	return numevents;
 }
 
 /* ======================= event loop ======================= */
-aeEventLoop *aeCreateEventLoop(int setsize) {
-    aeEventLoop *eventLoop;
-    int i;
+int aeEventDel(struct aeEventList * list, struct aeEvent *ae){
+	if (ae!=NULL && (ae->pre || ae->next)){
+		// TODO
+	}
+	return 0;
+}
 
-    if ((eventLoop = malloc(sizeof(*eventLoop))) == NULL) goto err;
-    eventLoop->events = malloc(sizeof(aeFileEvent)*setsize);
-    eventLoop->fired = malloc(sizeof(aeFiredEvent)*setsize);
-    if (eventLoop->events == NULL || eventLoop->fired == NULL) goto err;
-    eventLoop->timer = NULL;
-    eventLoop->setsize = setsize;
-    eventLoop->lastTime = time(NULL);
-    eventLoop->stop = 0;
-    eventLoop->maxfd = -1;
-    eventLoop->beforesleep = NULL;
-    if (aeCreateTimer(eventLoop) == -1) goto err;
-    if (aeApiCreate(eventLoop) == -1) goto err;
-    /* Events with mask == AE_NONE are not set. So let's initialize the
-     * vector with it. */
-    for (i = 0; i < setsize; i++)
-        eventLoop->events[i].mask = AE_NONE;
-    return eventLoop;
+aeEvent* aeEventPop(struct aeEventList * list){
+	struct aeEvent *ae = list->head;
+	if (ae!=NULL){
+		list->head = ae->next;
+		if (list->head==NULL){
+			list->tail = NULL;
+		}
+		ae->next = NULL;
+	}
+	return ae;
+}
+
+int aeEventPush(struct aeEventList * list, struct aeEvent *ae){
+	assert(!ae);
+	if (list->head==NULL){
+		list->head = ae;
+		list->tail = ae;
+	}else{
+		list->tail->next = ae;
+		list->tail = ae;
+	}
+	return 0;
+}
+
+aeEventLoop *aeCreateEventLoop(int setsize) {
+	aeEventLoop *eventLoop;
+
+	if ((eventLoop = malloc(sizeof(*eventLoop))) == NULL) goto err;
+	int byteSize = sizeof(aeEvent)*setsize;
+	eventLoop->events = malloc(byteSize);
+	memset(eventLoop->events, 0, byteSize);
+
+	if (aeCreateTimer(eventLoop) == -1) goto err;
+	if (aeApiCreate(eventLoop) == -1) goto err;
+
+	memset(eventLoop->epev, 0, sizeof(eventLoop->epev));
+	eventLoop->setsize = setsize;
+	eventLoop->lastTime = time(NULL);
+	eventLoop->stop = 0;
+
+	eventLoop->used.head = NULL;
+	eventLoop->used.tail = NULL;
+	eventLoop->free.head = NULL;
+	eventLoop->free.tail = NULL;
+	eventLoop->used.recycl = NULL;
+	eventLoop->used.recycl = NULL;
+
+	struct aeEventList *freeList = &eventLoop->free;
+	for (int i = 0; i < setsize; i++){
+		eventLoop->events[i].id = i+1;
+		aeEventPush(freeList, &eventLoop->events[i]);
+	}
+	return eventLoop;
 
 err:
-    if (eventLoop) {
-        free(eventLoop->events);
-        free(eventLoop->fired);
-        free(eventLoop);
-    }
-    return NULL;
+	if (eventLoop) {
+		free(eventLoop->events);
+		aeDestroyTimer(eventLoop->timer);
+		free(eventLoop->timer);
+		free(eventLoop);
+	}
+	return NULL;
 }
 
-/* Return the current set size. */
 int aeGetSetSize(aeEventLoop *eventLoop) {
-    return eventLoop->setsize;
+	return eventLoop->setsize;
 }
 
-/* Resize the maximum set size of the event loop.
- * If the requested set size is smaller than the current set size, but
- * there is already a file descriptor in use that is >= the requested
- * set size minus one, AE_ERR is returned and the operation is not
- * performed at all.
- *
- * Otherwise AE_OK is returned and the operation is successful. */
 int aeResizeSetSize(aeEventLoop *eventLoop, int setsize) {
-    int i;
+	int oldSize = eventLoop->setsize;
+	if (setsize == oldSize) return AE_OK;
+	if (oldSize >  setsize) return AE_ERR;
+	//if (aeApiResize(eventLoop,setsize) == -1) return AE_ERR;
 
-    if (setsize == eventLoop->setsize) return AE_OK;
-    if (eventLoop->maxfd >= setsize) return AE_ERR;
-    if (aeApiResize(eventLoop,setsize) == -1) return AE_ERR;
-
-    eventLoop->events = realloc(eventLoop->events,sizeof(aeFileEvent)*setsize);
-    eventLoop->fired = realloc(eventLoop->fired,sizeof(aeFiredEvent)*setsize);
-    eventLoop->setsize = setsize;
-
-    /* Make sure that if we created new slots, they are initialized with
-     * an AE_NONE mask. */
-    for (i = eventLoop->maxfd+1; i < setsize; i++)
-        eventLoop->events[i].mask = AE_NONE;
-    return AE_OK;
+	eventLoop->events = realloc(eventLoop->events, sizeof(aeEvent)*setsize);
+	eventLoop->setsize = setsize;
+	struct aeEventList *freeList = &eventLoop->free;
+	for (int i = oldSize; i < setsize; i++){
+		eventLoop->events[i].id = i+1;
+		aeEventPush(freeList, &eventLoop->events[i]);
+	}
+	return AE_OK;
 }
 
 void aeDeleteEventLoop(aeEventLoop *eventLoop) {
-    aeApiFree(eventLoop);
-    aeDestroyTimer(eventLoop);
-    free(eventLoop->events);
-    free(eventLoop->fired);
-    free(eventLoop);
+	aeApiFree(eventLoop);
+	aeDestroyTimer(eventLoop);
+	free(eventLoop->timer);
+	free(eventLoop->events);
+	free(eventLoop);
 }
 
 void aeStop(aeEventLoop *eventLoop) {
-    eventLoop->stop = 1;
+	eventLoop->stop = 1;
 }
 
-int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
-        aeFileProc *proc, void *clientData) {
-    if (fd >= eventLoop->setsize) {
-        errno = ERANGE;
-        return AE_ERR;
-    }
-    aeFileEvent *fe = &eventLoop->events[fd];// 分配一个event
+int aeCreateEvent(aeEventLoop *eventLoop, int fd, int mask, void *clientData) {
+	struct aeEvent *ae = aeEventPop(&eventLoop->free);
+	if (!ae) {
+		errno = ERANGE;
+		return AE_ERR;
+	}
 
-    if (aeApiAddEvent(eventLoop, fd, mask) == -1)
-        return AE_ERR;
-    fe->mask |= mask;
-    if (mask & AE_READABLE) fe->rfileProc = proc;
-    if (mask & AE_WRITABLE) fe->wfileProc = proc;
-    fe->clientData = clientData;
-    if (fd > eventLoop->maxfd)
-        eventLoop->maxfd = fd;
-    return AE_OK;
+	if (aeApiAddEvent(eventLoop, fd, mask, ae) == -1) return AE_ERR;
+	ae->ud = clientData;
+	ae->mask |= mask;
+	return AE_OK;
 }
 
-void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask) {
-    if (fd >= eventLoop->setsize) return;
-    aeFileEvent *fe = &eventLoop->events[fd];
-    if (fe->mask == AE_NONE) return;
+void aeDeleteEvent(aeEventLoop *eventLoop, int id, int mask) {
+	if (id>eventLoop->setsize || id<=0){
+		return;
+	}
 
-    aeApiDelEvent(eventLoop, fd, mask);
-    fe->mask = fe->mask & (~mask);
-    if (fd == eventLoop->maxfd && fe->mask == AE_NONE) {
-        /* Update the max fd */
-        int j;
+	struct aeEvent *ae = eventLoop->events[id-1];
+	if (ae!=NULL && ae->fd>0){
+		aeApiDelEvent(eventLoop, ae->fd, mask);
 
-        for (j = eventLoop->maxfd-1; j >= 0; j--)
-            if (eventLoop->events[j].mask != AE_NONE) break;
-        eventLoop->maxfd = j;
-    }
-}
-
-int aeGetFileEvents(aeEventLoop *eventLoop, int fd) {
-    if (fd >= eventLoop->setsize) return 0;
-    aeFileEvent *fe = &eventLoop->events[fd];
-
-    return fe->mask;
+		// 从used中移除
+		// 丢进垃圾箱
+		aeEventPush(&eventLoop->recycl, ae);
+	}
 }
 
 static void aeGetTime(long *seconds, long *milliseconds) {
-    struct timeval tv;
+	struct timeval tv;
 
-    gettimeofday(&tv, NULL);
-    *seconds = tv.tv_sec;
-    *milliseconds = tv.tv_usec/1000;
+	gettimeofday(&tv, NULL);
+	*seconds = tv.tv_sec;
+	*milliseconds = tv.tv_usec/1000;
 }
 
 int aeProcessEvents(aeEventLoop *eventLoop) {
-    int processed = 0, numevents; // 这里表示声明两边int变量
+	int processed = 0, numevents; // 这里表示声明两边int变量
 
-    // timer
-    eventLoop->lastTime = time(NULL);
-    int ms = aeTimerUpdatetime(eventLoop);
-    struct timeval tv;
-    struct timeval *tvp;
-    tv.tv_sec = ms/1000;
-    tv.tv_usec = (ms % 1000)*1000;
-    tvp = &tv;
+	// timer
+	eventLoop->lastTime = time(NULL);
+	int ms = aeTimerUpdatetime(eventLoop);
+	struct timeval tv;
+	struct timeval *tvp;
+	tv.tv_sec = ms/1000;
+	tv.tv_usec = (ms % 1000)*1000;
+	tvp = &tv;
 
-    // 网络消息处理
-    // TODO
+	// 回收aeEvent
+	// TODO
 
-    // 下面这种，不太适合游戏服务器，游戏服务器最好保证每一个逻辑帧都要平衡
-    numevents = aeApiPoll(eventLoop, tvp);
-    for (int j = 0; j < numevents; j++) {
-        aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
-        int mask = eventLoop->fired[j].mask;
-        int fd = eventLoop->fired[j].fd;
-        int rfired = 0;
+	// 网络消息处理
+	// TODO
 
-        /* note the fe->mask & mask & ... code: maybe an already processed
-         * event removed an element that fired and we still didn't
-         * processed, so we check if the event is still valid. */
-        if (fe->mask & mask & AE_READABLE) {
-            rfired = 1;
-            fe->rfileProc(eventLoop,fd,fe->clientData,mask);
-        }
-        if (fe->mask & mask & AE_WRITABLE) {
-            if (!rfired || fe->wfileProc != fe->rfileProc)
-                fe->wfileProc(eventLoop,fd,fe->clientData,mask);
-        }
-        processed++;
-    }
-    return processed; /* return the number of processed file/time events */
+	// 下面这种，不太适合游戏服务器，游戏服务器最好保证每一个逻辑帧都要平衡
+	numevents = aeApiPoll(eventLoop, tvp);
+	for (int j = 0; j < numevents; j++) {
+		aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
+		int mask = eventLoop->fired[j].mask;
+		int fd = eventLoop->fired[j].fd;
+		int rfired = 0;
+
+		/* note the fe->mask & mask & ... code: maybe an already processed
+		 * event removed an element that fired and we still didn't
+		 * processed, so we check if the event is still valid. */
+		if (fe->mask & mask & AE_READABLE) {
+			rfired = 1;
+			fe->rfileProc(eventLoop,fd,fe->clientData,mask);
+		}
+		if (fe->mask & mask & AE_WRITABLE) {
+			if (!rfired || fe->wfileProc != fe->rfileProc)
+				fe->wfileProc(eventLoop,fd,fe->clientData,mask);
+		}
+		processed++;
+	}
+	return processed; /* return the number of processed file/time events */
 }
 
 void aeMain(aeEventLoop *eventLoop) {
-    eventLoop->stop = 0;
-    while (!eventLoop->stop) {
-        if (eventLoop->beforesleep != NULL)
-            eventLoop->beforesleep(eventLoop);
-        aeProcessEvents(eventLoop);
-    }
-}
-
-char *aeGetApiName(void) {
-    return aeApiName();
-}
-
-void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep) {
-    eventLoop->beforesleep = beforesleep;
+	eventLoop->stop = 0;
+	while (!eventLoop->stop) {
+		if (eventLoop->beforesleep != NULL)
+			eventLoop->beforesleep(eventLoop);
+		aeProcessEvents(eventLoop);
+	}
 }
