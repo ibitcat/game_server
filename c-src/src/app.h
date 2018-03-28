@@ -41,8 +41,8 @@ typedef struct __attribute__ ((__packed__)) msgPack{
 	int len;
 	int flag;
 	unsigned int cmd;
-	char fromType;
-	char toType;
+	unsigned char fromType;
+	unsigned char toType;
 	unsigned char fromId;
 	unsigned char toId;
 	char buf[];

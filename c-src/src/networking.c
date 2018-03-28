@@ -171,6 +171,7 @@ static void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) 
 
 	// 处理接收到fd
 	netSession * session = createSession(cfd, cip, cport);
+	// session
 	if (session==NULL){
 		serverLog(LL_WARNING, "create session fail: %d", cfd);
 		return;
@@ -264,6 +265,24 @@ void closeSession(netSession * session){
 	cl_netClosed(fd);
 }
 
+
+/*
+evloop ={
+	events = {
+		fd=2,
+		id=1,
+		ud=0x1001, --session prt
+		acb = on_accepted
+		rcb = on_readable,
+		wcb = null,
+		ecb
+	},
+	max=10240
+
+	push_events,
+}
+*/
+
 int netListen(int port, char * addr){
 	int fd = anetTcpServer(app.err, port, addr, 511); // 监听的socket
 	if (fd == ANET_ERR) {
@@ -271,6 +290,9 @@ int netListen(int port, char * addr){
 		return -1;
 	}else{
 		anetNonBlock(NULL, fd);
+
+		// session
+		// aeNetListen(pel, session, acb, ecb);
 
 		// listen
 		if (aeCreateFileEvent(app.pEl, fd, AE_READABLE, acceptTcpHandler, NULL) == -1){
@@ -294,6 +316,9 @@ int netConnect(char * addr, int port){
 		serverLog(LL_WARNING, "session create fail...");
 		return -1;
 	}
+
+	// 通知lua层
+	// cl_connected(xxx);
 	return fd;
 }
 
@@ -310,4 +335,11 @@ int netWrite(int fd, msgPack * pkt){
 		closeSession(session);
 	}
 	return ok;
+}
+
+int netClose(){
+	// id
+	// 根据传入的sessionId
+	// epoll_del(efd, fd)
+	return 0;
 }

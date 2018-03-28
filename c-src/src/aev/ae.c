@@ -227,7 +227,7 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         errno = ERANGE;
         return AE_ERR;
     }
-    aeFileEvent *fe = &eventLoop->events[fd];
+    aeFileEvent *fe = &eventLoop->events[fd];// 分配一个event
 
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
@@ -284,6 +284,10 @@ int aeProcessEvents(aeEventLoop *eventLoop) {
     tv.tv_usec = (ms % 1000)*1000;
     tvp = &tv;
 
+    // 网络消息处理
+    // TODO
+
+    // 下面这种，不太适合游戏服务器，游戏服务器最好保证每一个逻辑帧都要平衡
     numevents = aeApiPoll(eventLoop, tvp);
     for (int j = 0; j < numevents; j++) {
         aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];

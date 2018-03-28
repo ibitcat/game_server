@@ -30,6 +30,39 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+
+/*
+事件触发后，并不立即处理，而是先做标记
+然后，在每一个逻辑帧内，先处理timer，然后再处理网络消息
+
+每个逻辑帧以10ms为单位，注意的是需要控制每一帧都是走10ms
+
+假设：
+t1 = timer时间 + 网络处理时间，
+t2 = epoll阻塞时间
+也即是 t = t1 + t2 = 10ms
+
+那么将有几种情况：
+1、t1<10ms,则t2=10-t1
+2、t1=10ms,则t2=0,也即是说epoll立即范围，什么也不干，等到下一帧再处理
+3、20ms>t1>10ms,则t2<0,也就表示这一帧花费太多时间，那么在下一帧的时候要在20-t1内处理完
+4、t1>=20ms,那么下一帧就要连续处理2帧，来弥补这一帧耗费的过长的时间
+
+这样做是为了，保证timer一定是以10ms为单位往前推进，确保定时器的精确
+
+while{
+    // timer
+    // 网络
+    // epoll 等待10ms
+}
+
+可以优化的地方：
+1、events 不用fd作为key
+
+
+*/
+
+
 #ifndef __AE_H__
 #define __AE_H__
 
@@ -109,6 +142,17 @@ typedef struct aeEventLoop {
     void *apidata; /* This is used for polling API specific data */
     aeBeforeSleepProc *beforesleep;
 } aeEventLoop;
+
+
+// 封装的通用事件
+typedef struct ev{
+    void * clientData;  // 指向一个session
+    int read;           // =1表示有可读事件
+    int write;          // =1表示有可写事件，表示上一次写入缓存已经满了，这一次缓存有空闲，可以写入上次没有写完的数据
+    int error;          // =1表示有错误，需要断开连接了
+};
+
+
 
 
 /* Prototypes */
