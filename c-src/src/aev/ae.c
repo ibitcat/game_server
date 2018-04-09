@@ -114,9 +114,11 @@ static int aeApiPoll(aeEventLoop *eventLoop, int ms) {
 
 /* ======================= event loop ======================= */
 int aeEventDel(struct aeEventList * list, struct aeEvent *ae){
+	assert(!ae->list);
 	if (ae!=NULL && (ae->pre || ae->next)){
 		// TODO
 	}
+	ae->list = list;
 	return 0;
 }
 
@@ -128,6 +130,7 @@ aeEvent* aeEventPop(struct aeEventList * list){
 			list->tail = NULL;
 		}
 		ae->next = NULL;
+		ae->list = NULL;
 	}
 	return ae;
 }
